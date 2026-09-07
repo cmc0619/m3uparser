@@ -28,11 +28,12 @@ def main():
         # Parse the m3u file and get a list of dictionaries containing key-value pairs
         entries, errors = vars(parse_m3u_file, variables_all, 'm3u_file_path', clean_group_title, process_value,
                                'REPLACE_TERMS', 'REPLACE_DEFAULTS', 'SCRUB_HEADER', 'SCRUB_DEFAULTS', 'REMOVE_TERMS',
-                               'REMOVE_DEFAULTS', 'EXCLUDE_TERM')
+                               'REMOVE_DEFAULTS', 'EXCLUDE_TERM', 'INCLUDE_TERM', 'filter_live_tv')
         # Process each entry dictionary and track created .strm files
-        vars(proc_entries, variables_all, entries, errors, 'tv_dir', 'movies_dir', 'unsorted_dir')
+        vars(proc_entries, variables_all, entries, errors, 'tv_dir', 'movies_dir', 'unsorted_dir',
+             'remove_duplicates')
         # Extract live TV entries and process them separately
-        live_tv_entries = [entry for entry in entries if entry.get('livetv')]
+        live_tv_entries = [entry for entry in entries if entry.get('livetv') and not entry.get('exclude')]
         vars(process_live_tv_entries, variables_all, live_tv_entries, 'livetv_file')
         # Sync items from VOD m3us to local directories & Move livetv.m3u
         vars(sync_directories, variables_all, 'movies_dir', 'local_mov_dir', 'remove_sync')
@@ -50,7 +51,9 @@ def main():
         # Output errors if any
         errz(errors)
         # Output results
-        final_output(errors, livetv_channels_count, movie_strm_count, tv_strm_count, unsorted_strm_count)
+        excluded_count, duplicate_count = count_filtered(entries)
+        final_output(errors, livetv_channels_count, movie_strm_count, tv_strm_count, unsorted_strm_count,
+                     excluded_count, duplicate_count)
         # Run Jellyfin server set-up and/or ezpztv_task
         vars(torf, variables_all, SERVER_CFG='SERVER_CFG', wait_for_server=wait_for_server,  ezpztv_task=ezpztv_task,
              ezpztv_setup=ezpztv_setup, application_version='application_version', APIKEY='APIKEY', tf_update=tf_update,
