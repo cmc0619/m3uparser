@@ -82,9 +82,9 @@ jobs:
           echo "branch=$BRANCH" >> $GITHUB_ENV
           echo "repo_name=$REPO_NAME" >> $GITHUB_ENV
 
-      # Step 6: Log in to Docker Hub
+      # Step 6: Log in to Docker Hub (only on branch pushes, and only when credentials are configured)
       - name: Log in to Docker Hub
-        if: env.skip_build == 'false'
+        if: env.skip_build == 'false' && github.event_name == 'push' && env.DOCKER_USERNAME != ''
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -97,9 +97,9 @@ jobs:
           docker build -t ${{ env.DOCKER_USERNAME }}/${{ env.repo_name }}:latest \
                        -t ${{ env.DOCKER_USERNAME }}/${{ env.repo_name }}:${{ env.version }} .
 
-      # Step 8: Push both tags to Docker Hub
+      # Step 8: Push both tags to Docker Hub (only on branch pushes, and only when credentials are configured)
       - name: Push Docker image
-        if: env.skip_build == 'false'
+        if: env.skip_build == 'false' && github.event_name == 'push' && env.DOCKER_USERNAME != ''
         run: |
           docker push ${{ env.DOCKER_USERNAME }}/${{ env.repo_name }}:latest
           docker push ${{ env.DOCKER_USERNAME }}/${{ env.repo_name }}:${{ env.version }}
