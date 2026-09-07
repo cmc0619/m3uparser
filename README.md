@@ -75,6 +75,8 @@ Then run:
 docker compose up -d
 ```
 
+If you prefer inline `environment:` entries over an env file, or want to build the image from this repository instead of pulling it, start from [`m3uparser/docker-compose.example.yaml`](./m3uparser/docker-compose.example.yaml) and replace the `<placeholder>` values.
+
 ## Basic Information
 
 ### Expanding default values
