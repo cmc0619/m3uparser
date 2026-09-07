@@ -34,6 +34,13 @@ class TermMatchingTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertFalse(term_in_text(text, ['EN']))
 
+    def test_underscore_is_a_word_boundary(self):
+        """Underscores separate words, so 'EN' matches EN_MOVIES and EN_US but not ENTER_."""
+        for text in ('EN_MOVIES', 'EN_US', 'MOVIES_EN', '_EN_'):
+            with self.subTest(text=text):
+                self.assertTrue(term_in_text(text, ['EN']))
+        self.assertFalse(term_in_text('ENTER_MOVIES', ['EN']))
+
     def test_symbol_edges_match_literally(self):
         """A term ending in a symbol ('FR -') is matched exactly where it is written."""
         self.assertTrue(term_in_text('FR - Films', ['FR -']))

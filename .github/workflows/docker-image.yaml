@@ -10,6 +10,9 @@ on:
     branches-ignore:
       - '**/exclude-*'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -104,12 +107,12 @@ jobs:
       - name: Build Docker image
         if: env.skip_build == 'false'
         run: |
-          docker build -t ${{ env.image }}:latest \
-                       -t ${{ env.image }}:${{ env.version }} .
+          docker build -t "${image}:latest" \
+                       -t "${image}:${version}" .
 
       # Step 8: Push both tags to Docker Hub (only on branch pushes, and only when credentials are configured)
       - name: Push Docker image
         if: env.skip_build == 'false' && github.event_name == 'push' && env.DOCKER_USERNAME != ''
         run: |
-          docker push ${{ env.image }}:latest
-          docker push ${{ env.image }}:${{ env.version }}
+          docker push "${image}:latest"
+          docker push "${image}:${version}"

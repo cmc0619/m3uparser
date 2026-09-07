@@ -13,11 +13,13 @@ def term_pattern(term):
     ``Documentary`` or ``General``. An edge that is a symbol (``FR -``,
     ``[EN]``) is matched exactly where it is written.
     """
+    # [^\W_] is "a letter or digit": unlike \w it does not count the underscore,
+    # so EN still matches EN_MOVIES or EN_US
     pattern = re.escape(term)
     if term[0].isalnum():
-        pattern = r'(?<!\w)' + pattern
+        pattern = r'(?<![^\W_])' + pattern
     if term[-1].isalnum():
-        pattern = pattern + r'(?!\w)'
+        pattern = pattern + r'(?![^\W_])'
     return re.compile(pattern, flags=re.IGNORECASE)
 
 
