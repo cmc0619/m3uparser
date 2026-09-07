@@ -70,17 +70,27 @@ jobs:
         if: env.skip_build == 'false'
         id: branch_info
         run: |
-          # Extract branch name from the GITHUB_REF
-          BRANCH=$(echo "${GITHUB_REF##*/}")
-          
+          # Extract branch name: the head branch on pull requests, otherwise the pushed ref
+          REF="${GITHUB_HEAD_REF:-$GITHUB_REF}"
+          BRANCH=$(echo "${REF##*/}")
+
           # Define the Docker Hub repository name
           if [ "$BRANCH" = "main" ]; then
             REPO_NAME="m3uparser" # Replace with your DockerHub repo name for main
           else
             REPO_NAME=$BRANCH
           fi
+
+          # Prefix with the Docker Hub username only when one is configured,
+          # so forks without credentials still get a valid local image name
+          if [ -n "$DOCKER_USERNAME" ]; then
+            IMAGE="$DOCKER_USERNAME/$REPO_NAME"
+          else
+            IMAGE="$REPO_NAME"
+          fi
           echo "branch=$BRANCH" >> $GITHUB_ENV
           echo "repo_name=$REPO_NAME" >> $GITHUB_ENV
+          echo "image=$IMAGE" >> $GITHUB_ENV
 
       # Step 6: Log in to Docker Hub (only on branch pushes, and only when credentials are configured)
       - name: Log in to Docker Hub
@@ -94,12 +104,12 @@ jobs:
       - name: Build Docker image
         if: env.skip_build == 'false'
         run: |
-          docker build -t ${{ env.DOCKER_USERNAME }}/${{ env.repo_name }}:latest \
-                       -t ${{ env.DOCKER_USERNAME }}/${{ env.repo_name }}:${{ env.version }} .
+          docker build -t ${{ env.image }}:latest \
+                       -t ${{ env.image }}:${{ env.version }} .
 
       # Step 8: Push both tags to Docker Hub (only on branch pushes, and only when credentials are configured)
       - name: Push Docker image
         if: env.skip_build == 'false' && github.event_name == 'push' && env.DOCKER_USERNAME != ''
         run: |
-          docker push ${{ env.DOCKER_USERNAME }}/${{ env.repo_name }}:latest
-          docker push ${{ env.DOCKER_USERNAME }}/${{ env.repo_name }}:${{ env.version }}
+          docker push ${{ env.image }}:latest
+          docker push ${{ env.image }}:${{ env.version }}
