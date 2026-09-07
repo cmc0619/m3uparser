@@ -17,7 +17,10 @@ services:
       - M3U_URL= # "https://m3u_URL1.com, https://m3u_URL2.com, etc..."
       - HOURS=12 # update interval, setting this optional, default 12hrs.
       - SCRUB_HEADER= # Optional, add more/different scrub values, does not override the defaults
-      - EXCLUDE_TERMS= # Optional, this acts as a filter to ignore stream that contain defined value in group-title
+      - EXCLUDE_TERMS= # Optional, this acts as a filter to ignore streams that contain defined value in group-title, tvg-name or #EXTGRP
+      - INCLUDE_TERMS= # Optional, only keep streams that contain one of the defined values in group-title, tvg-name or #EXTGRP
+      - FILTER_LIVE_TV= # Default is false, true will apply INCLUDE_TERMS/EXCLUDE_TERMS to live tv channels as well
+      - REMOVE_DUPLICATES= # Default is true, only writes the first occurrence of a title that shows up in more than one group
       - REMOVE_TERMS= # Optional, add more/different remove term values, does not override the defaults
       - REPLACE_TERMS= # Optional, add more/different replace values, does not override the defaults
       - CLEANERS= # Optional, add more/different cleaner values, does not override the defaults
@@ -43,7 +46,9 @@ services:
 | BYPASS_HEADER | true/false                                          | Bypass checking url header for content-type and content-disposition.                                          | False                                        | False                               |
 | HOURS         | numeric value                                       | Number representing the interval you want to update from m3u urls                                             | 12                                           | 8                                   |
 | SCRUB_HEADER  | any text, in quotes, and seperated with a comma ,   | Removes value and preceding text from begining of group-title line                                            | "HD :"                                       | "HD :, SD :"                        |
-| EXCLUDE_TERMS | any text, in quotes, and seperated with a comma ,   | Excludes content that contains defined term if found in the group-title                                       | "AR -, FR -"                                 | ""                                  |
+| EXCLUDE_TERMS | any text, in quotes, and seperated with a comma ,   | Excludes content that contains a defined term in the group-title, tvg-name or #EXTGRP line                    | "AR -, FR -"                                 | ""                                  |
+| INCLUDE_TERMS | any text, in quotes, and seperated with a comma ,   | Only keeps content that contains a defined term in the group-title, tvg-name or #EXTGRP line                  | "EN"                                         | ""                                  |
+| FILTER_LIVE_TV| true/false                                          | Apply INCLUDE_TERMS/EXCLUDE_TERMS to live tv channels as well as VOD                                          | false                                        | false                               |
 | REMOVE_TERMS  | any text, in quotes, and seperated with a comma ,   | Removes value(s) set from file and directory names                                                            | "x264, 720p"                                 | "720p, WEB, h264, H264, HDTV, x264" |
 | REPLACE_TERMS | "term-to-replace=replace-value"                     | Replaces one value with another. Separate terms with an = and term on left is replaced with term to the right | "replace-this=with-this"                     | "1/2=\u00BD, /=-"                   |
 | CLEANERS      | series,movie,tv,unsorted                            | Type of stream to apply REMOVE_TERMS value to                                                                 | tv, movies                                   | tv                                  |
@@ -51,6 +56,7 @@ services:
 | CLEAN_SYNC    | true/false                                          | Will remove titles from VOD folders that are not present in m3u.                                              | false                                        | false                               |
 | LIVE_TV       | true/false                                          | Parse live tv streams in m3u urls and creates a single livetv.m3u                                             | true/false                                   | true                                |
 | UNSORTED      | true/false                                          | Creates a VOD folder for undefined streams, either misspelled or poorly labeled streams                       | true/false                                   | false                               |
+| REMOVE_DUPLICATES | true/false                                      | Only writes the first occurrence of a title that resolves to the same .strm file                              | true                                         | true                                |
 
 ## Instalation Process
 
@@ -68,6 +74,8 @@ Then run:
 ```
 docker compose up -d
 ```
+
+If you prefer inline `environment:` entries over an env file, or want to build the image from this repository instead of pulling it, start from [`m3uparser/docker-compose.example.yaml`](./m3uparser/docker-compose.example.yaml) and replace the `<placeholder>` values.
 
 ## Basic Information
 
@@ -99,6 +107,8 @@ Note that any quotes that exist in the `group-title` are stripped before the `SC
 
 You can escape characters like `,` by using a `\` So if your `group-title` looks like this `group-title="Movie VOD",The Fall Guy 2024`, your SCRUB_HEADER value should look like this `SCRUB_HEADER="\,"` So this finds the first instance of a `,` and then removes it and anything that precedes it.
 
+Special characters such as `+` in the group name are handled, so `group-title="Documentary+",Get Gotti` with `SCRUB_HEADER="\,"` becomes `Get Gotti`. Stripping a `"<group>",` prefix this way is the recommended approach, since `\,` matches regardless of what the group name is. Note that empty items in the comma separated list are ignored (`"a,,,b"` is the same as `"a, b"`), so a bare `,` must always be written as `\,`.
+
 Default is set to: `SCRUB_HEADER="HD :, SD :"`
 
 ### REMOVE_TERMS & CLEANERS
@@ -118,6 +128,28 @@ Default is set to: `tv`
 Add more replacements to `REPLACE_TERMS` in the format `"replace=value"`. For example: `REPLACE_TERMS="replace-this=with-this, dontwant=wantinstead"`. This replaces specified terms in all streams, except live TV.
 
 Default is set to: `"1/2=\u00BD, /=-"`
+
+### EXCLUDE_TERMS & INCLUDE_TERMS
+
+`EXCLUDE_TERMS` drops any stream that contains one of the given terms. `INCLUDE_TERMS` does the opposite: when it is set, only streams that contain at least one of the given terms are kept and everything else is dropped. Both check the `group-title`, the `tvg-name` and the `#EXTGRP` line (if present), and both use the same format, multiple values separated by commas, in a single set of quotes. `EXCLUDE_TERMS` always wins, so a stream that matches both an include and an exclude term is dropped.
+
+Example: `INCLUDE_TERMS="EN"` keeps only English tagged groups. `EXCLUDE_TERMS="AR -, FR -"` drops the Arabic and French groups.
+
+Terms are matched case-insensitively and literally, so characters like `+`, `[` or `|` can be used as they are. When a term starts or ends with a letter or digit, that edge has to be on a word boundary. `EN` matches `EN - Series`, `[EN]` and `Movies EN`, but not `Documentary`, `General` or `ENTERTAINMENT`. Edges that are symbols match exactly where written, so `FR -` matches `FR - Films` and `US |` matches `US | Sports`.
+
+The filters are applied to the raw values before `SCRUB_HEADER` and `REPLACE_TERMS` run, so write the terms as they appear in the source m3u.
+
+By default the filters only affect the VOD folders (movies, series, tv, unsorted) and live TV channels are always written to `livetv.m3u`. Set `FILTER_LIVE_TV=true` to apply `INCLUDE_TERMS`/`EXCLUDE_TERMS` to live TV channels as well.
+
+Defaults are set to: `EXCLUDE_TERMS=""`, `INCLUDE_TERMS=""`, `FILTER_LIVE_TV=false`
+
+### REMOVE_DUPLICATES
+
+Providers often deliver the same title in several groups (for example `EN - Movies` and `4K - Movies`). After `SCRUB_HEADER`, `REPLACE_TERMS` and `REMOVE_TERMS` have been applied, if two streams resolve to exactly the same .strm file path (compared case-insensitively) only the first one found in the m3u is written and later ones are skipped, so the title shows up once in Jellyfin. Set `REMOVE_DUPLICATES=false` to restore the old behaviour where the last occurrence overwrote the earlier ones. Live TV channels are never de-duplicated.
+
+The summary printed at the end of each run shows the number of entries dropped by `INCLUDE_TERMS`/`EXCLUDE_TERMS` and the number of duplicates skipped.
+
+Default is set to `REMOVE_DUPLICATES=true`
 
 ### BYPASS_HEADER
 

@@ -24,62 +24,77 @@ def process_live_tv_entries(entries, livetv_file):
                 f.write(stream_url_line + '\n')
 
 
-def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors):
+def strm_path_for_entry(entry, tv_dir, movies_dir, unsorted_dir):
+    """Return the .strm path an entry would be written to, or None if it is skipped.
+
+    Entries flagged with ``exclude`` (INCLUDE_TERMS / EXCLUDE_TERMS) and live TV
+    entries never produce a .strm file.
+    """
+    if entry.get("exclude"):
+        return None
+
+    if entry.get('series') and entry.get('tv_show'):
+        show_title = entry.get('show_title')
+        season = entry.get('season')
+        season_episode = entry.get('season_episode')
+        series_dir = os.path.join(tv_dir, show_title, f"Season {season}")
+        return os.path.join(series_dir, f"{show_title} {season_episode}.strm")
+
+    if entry.get('television') and entry.get('tv_show'):
+        air_date = entry.get('air_date')
+        show_title = entry.get('show_title')
+        guest_star = entry.get('guest_star')
+        television_file = [show_title]
+        if guest_star:
+            television_file.append(guest_star)
+        television_file.append(air_date)
+        tv_strm_file = ", ".join(television_file)
+        tv_show_dir = os.path.join(tv_dir, show_title)
+        return os.path.join(tv_show_dir, f"{tv_strm_file}.strm")
+
+    if entry.get('movie'):
+        movie_title = entry.get('movie_title')
+        movie_date = entry.get('movie_date')
+        movie_dir_path = os.path.join(movies_dir, f"{movie_title} ({movie_date})")
+        return os.path.join(movie_dir_path, f"{movie_title} ({movie_date}).strm")
+
+    if entry.get('unsorted'):
+        group_title = entry.get('group-title', '')
+        unsorted_dir_path = os.path.join(unsorted_dir, group_title)
+        return os.path.join(unsorted_dir_path, f"{group_title}.strm")
+
+    return None
+
+
+def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors, seen_paths=None):
+    """Write the .strm file for a single entry and return its path.
+
+    When ``seen_paths`` is a set, it is used to de-duplicate entries: if the
+    final (fully cleaned) .strm path was already produced during this run,
+    compared case-insensitively, the entry is flagged ``duplicate=True`` and
+    skipped. The first occurrence in the m3u wins.
+    """
     try:
+        strm_file = strm_path_for_entry(entry, tv_dir, movies_dir, unsorted_dir)
+        if strm_file is None:
+            return None
 
-        if entry.get('series') and entry.get('tv_show') and not entry.get("exclude"):
-            show_title = entry.get('show_title')
-            season = entry.get('season')
-            season_episode = entry.get('season_episode')
-            series_dir = os.path.join(tv_dir, show_title, f"Season {season}")
-            if not os.path.exists(series_dir):
-                os.makedirs(series_dir)
-                # print(f"Created directory: {series_dir}")
-            strm_file = os.path.join(series_dir, f"{show_title} {season_episode}.strm")
-            # print(f"Writing to file: {strm_file}")
-            write_to_file(strm_file, entry.get('stream_url', ''))
-            return strm_file
+        dedupe_key = strm_file.lower()
+        if seen_paths is not None and dedupe_key in seen_paths:
+            entry['duplicate'] = True
+            return None
 
-        elif entry.get('television') and entry.get('tv_show') and not entry.get("exclude"):
-            air_date = entry.get('air_date')
-            show_title = entry.get('show_title')
-            guest_star = entry.get('guest_star')
-            television_file = [show_title]
-            if guest_star:
-                television_file.append(guest_star)
-            television_file.append(air_date)
-            tv_strm_file = f","' '.join(television_file)
-            tv_show_dir = os.path.join(tv_dir, show_title)
-            if not os.path.exists(tv_show_dir):
-                os.makedirs(tv_show_dir)
-                # print(f"Created directory: {tv_show_dir}")
-            strm_file = os.path.join(tv_show_dir, f"{tv_strm_file}.strm")
-            # print(f"Writing to file: {strm_file}")
-            write_to_file(strm_file, entry.get('stream_url', ''))
-            return strm_file
-
-        elif entry.get('movie') and not entry.get("exclude"):
-            movie_title = entry.get('movie_title')
-            movie_date = entry.get('movie_date')
-            movie_dir_path = os.path.join(movies_dir, f"{movie_title} ({movie_date})")
-            if not os.path.exists(movie_dir_path):
-                os.makedirs(movie_dir_path)
-                # print(f"Created directory: {movie_dir_path}")
-            strm_file = os.path.join(movie_dir_path, f"{movie_title} ({movie_date}).strm")
-            # print(f"Writing to file: {strm_file}")
-            write_to_file(strm_file, entry.get('stream_url', ''))
-            return strm_file
-
-        elif entry.get('unsorted') and not entry.get("exclude"):
-            group_title = entry.get('group-title', '')
-            unsorted_dir_path = os.path.join(unsorted_dir, group_title)
-            if not os.path.exists(unsorted_dir_path):
-                os.makedirs(unsorted_dir_path)
-                # print(f"Created directory: {unsorted_dir_path}")
-            strm_file = os.path.join(unsorted_dir_path, f"{group_title}.strm")
-            # print(f"Writing to file: {strm_file}")
-            write_to_file(strm_file, entry.get('stream_url', ''))
-            return strm_file
+        strm_dir = os.path.dirname(strm_file)
+        if not os.path.exists(strm_dir):
+            os.makedirs(strm_dir)
+            # print(f"Created directory: {strm_dir}")
+        # print(f"Writing to file: {strm_file}")
+        write_to_file(strm_file, entry.get('stream_url', ''))
+        # Only remember the path once the file exists, so a failed first write
+        # does not make later occurrences of the same title look like duplicates
+        if seen_paths is not None:
+            seen_paths.add(dedupe_key)
+        return strm_file
 
     except Exception as e:
         error_message = f"Error handling entry: {entry}\nError: {e}"
@@ -88,13 +103,20 @@ def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors)
         return None
 
 
-def proc_entries(entries, errors, tv_dir, movies_dir, unsorted_dir):
+def proc_entries(entries, errors, tv_dir, movies_dir, unsorted_dir, remove_duplicates=True):
+    """Write .strm files for all entries.
+
+    With ``remove_duplicates`` enabled (the default), titles that resolve to
+    the same .strm path after all cleaning and replacements are only written
+    once, so a title delivered in several m3u groups shows up a single time
+    in Jellyfin.
+    """
     tv_strm_files = []
     movie_strm_files = []
     unsorted_strm_files = []
+    seen_paths = set() if remove_duplicates else None
     for entry in entries:
-        # from parser import tv_dir, movies_dir, unsorted_dir
-        strm_file = handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors)
+        strm_file = handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors, seen_paths)
         if strm_file:
             if entry.get('tv_show'):
                 tv_strm_files.append(strm_file)

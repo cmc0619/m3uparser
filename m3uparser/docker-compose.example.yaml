@@ -1,0 +1,43 @@
+# Example compose file using inline environment variables instead of an env file.
+# Replace every <placeholder> before starting the container.
+#
+# This fork is not published to Docker Hub, so build the image from this repository:
+#   git clone https://github.com/cmc0619/m3uparser
+#   cd m3uparser/m3uparser
+#   docker compose -f docker-compose.example.yaml up -d --build
+services:
+  m3uparser:
+    container_name: m3uparser
+    build:
+      context: ..
+    image: m3uparser:local
+    environment:
+      - PUID=1000
+      - PGID=1000
+      # Provider playlist link. Keep the surrounding quotes and separate several URLs with commas.
+      - M3U_URL="http://<provider-host>/get.php?username=<username>&password=<password>&type=m3u_plus&output=ts"
+      - HOURS=8
+      - BYPASS_HEADER=true
+      - CLEAN_SYNC=true
+      # Drop non-English groups. Terms are matched literally as whole words, so no backslash
+      # escaping is needed, and there must be no space between = and the opening quote.
+      - EXCLUDE_TERMS="AF|, AL|, ALB|, AR|, BG|, BR|, CH|, DE|, DK|, ES|, EXYU|, FR|, GR|, HU|, IL|, IN|, IR|, IT|, JP|, KO|, KURDISH, LT|, MY|, NL|, PH|, PK|, PL|, PT|, RO|, RU|, SW|, TH|, TR|, INDIA"
+      # Simpler alternative when every group you want is tagged EN|: keep only those and drop EXCLUDE_TERMS.
+      # - INCLUDE_TERMS="EN|"
+      # Set to true to apply INCLUDE_TERMS/EXCLUDE_TERMS to live TV channels as well.
+      - FILTER_LIVE_TV=false
+      # Write a title once even when it is delivered in several groups.
+      - REMOVE_DUPLICATES=true
+      # Strip the EN| tag from titles.
+      - REMOVE_TERMS="EN|"
+      - LIVE_TV=false
+      - CLEANERS=series,movies,tv
+      # Strip the "<group>", prefix from every title. A single escaped comma is all that is needed.
+      - SCRUB_HEADER="\,"
+      - JELLYFIN_URL=http://<jellyfin-host>:8096
+      - API_KEY=<jellyfin-api-key>
+      - REFRESH_LIB=true
+      - UNSORTED=true
+    volumes:
+      - /mnt/user/data/media/VODS:/usr/src/app/VODS
+      - /mnt/cache/.appdata/m3uparser/logs:/usr/src/app/logs/

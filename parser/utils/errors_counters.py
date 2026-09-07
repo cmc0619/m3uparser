@@ -21,6 +21,13 @@ def count_emup(live_tv_entries, tv_dir, movies_dir, unsorted_dir):
     return livetv_channels_count, movie_strm_count, tv_strm_count, unsorted_strm_count
 
 
+def count_filtered(entries):
+    """Count entries dropped by INCLUDE_TERMS / EXCLUDE_TERMS and by de-duplication."""
+    excluded_count = sum(1 for entry in entries if entry.get('exclude'))
+    duplicate_count = sum(1 for entry in entries if entry.get('duplicate'))
+    return excluded_count, duplicate_count
+
+
 def errz(errors):
     if errors:
         print("\nTotal number of errors:", len(errors))
@@ -28,12 +35,15 @@ def errz(errors):
             print(error)
 
 
-def final_output(errors, livetv_channels_count, movie_strm_count, tv_strm_count, unsorted_strm_count):
+def final_output(errors, livetv_channels_count, movie_strm_count, tv_strm_count, unsorted_strm_count,
+                 excluded_count=0, duplicate_count=0):
     print("\nTotal number of errors:", len(errors))
     print("\nNumber of movies parsed =", movie_strm_count)
     print("Number of episodes parsed =", tv_strm_count)
     print("Number of unsorted entries parsed =", unsorted_strm_count)
     print("Number of live TV channels parsed =", livetv_channels_count)
+    print("Number of entries excluded by INCLUDE_TERMS/EXCLUDE_TERMS =", excluded_count)
+    print("Number of duplicate entries skipped =", duplicate_count)
 
 
 def setup_logging(log_file_path):
