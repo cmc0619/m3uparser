@@ -79,12 +79,10 @@ def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors,
         if strm_file is None:
             return None
 
-        if seen_paths is not None:
-            dedupe_key = strm_file.lower()
-            if dedupe_key in seen_paths:
-                entry['duplicate'] = True
-                return None
-            seen_paths.add(dedupe_key)
+        dedupe_key = strm_file.lower()
+        if seen_paths is not None and dedupe_key in seen_paths:
+            entry['duplicate'] = True
+            return None
 
         strm_dir = os.path.dirname(strm_file)
         if not os.path.exists(strm_dir):
@@ -92,6 +90,10 @@ def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors,
             # print(f"Created directory: {strm_dir}")
         # print(f"Writing to file: {strm_file}")
         write_to_file(strm_file, entry.get('stream_url', ''))
+        # Only remember the path once the file exists, so a failed first write
+        # does not make later occurrences of the same title look like duplicates
+        if seen_paths is not None:
+            seen_paths.add(dedupe_key)
         return strm_file
 
     except Exception as e:

@@ -100,6 +100,30 @@ class HandleEntryTests(TempDirsMixin, unittest.TestCase):
         self.assertEqual(len(seen), 1)
         self.assertEqual(errors, [])
 
+    def test_failed_first_write_does_not_mark_later_entry_duplicate(self):
+        """A path is only remembered once its .strm was written, so a failed first write is retried."""
+        errors, seen = [], set()
+        calls = []
+
+        def flaky_write(filepath, content):
+            """Fail the first write, succeed afterwards."""
+            calls.append(filepath)
+            if len(calls) == 1:
+                raise OSError('disk full')
+            write_to_file(filepath, content)
+
+        first = movie('Get Gotti', '2023', 'http://x/1')
+        second = movie('Get Gotti', '2023', 'http://x/2')
+        self.assertIsNone(handle_entry(first, self.tv_dir, self.movies_dir, self.unsorted_dir, flaky_write,
+                                       errors, seen))
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(seen, set())
+        path = handle_entry(second, self.tv_dir, self.movies_dir, self.unsorted_dir, flaky_write, errors, seen)
+        self.assertIsNotNone(path)
+        self.assertFalse(second.get('duplicate'))
+        self.assertEqual(self.strm_files(), {os.path.join('Movie_VOD', 'Get Gotti (2023)', 'Get Gotti (2023).strm'):
+                                             'http://x/2'})
+
     def test_excluded_entry_writes_nothing(self):
         """Excluded entries produce no file and no error."""
         errors = []
