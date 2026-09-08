@@ -29,6 +29,7 @@ services:
       - CLEANERS= # Optional, add more/different cleaner values, does not override the defaults
       - CLEAN_SYNC= # If set to true will remove titles from VOD folders that are not present in m3u files, Defaults to false if blank.
       - MIN_SOURCE_RATIO= # Default 0.5, a provider returning fewer than this share of last run's entries is treated as down and nothing of its is removed
+      - REMOVE_AFTER_DAYS= # Default 0, keep a title that vanished from a working provider this many days before removing it
       - LIVE_TV= # Default is true, true will make a combined livetv.m3u from all live tv streams found in m3u files. Will be placed in /VODS/Live_TV 
       - UNSORTED= # Default is false, true will put at /VODS/Unsorted_VOD
       - JELLYFIN_URL= # Requires a Jellyfin server to be running. http://<jfin_url:8096> DO NOT use quotes around server url.
@@ -60,6 +61,7 @@ services:
 | REFRESH_LIB   | true/false                                          | Refresh Jellyfin libraries after parsing                                                                      | false                                        | false                               |
 | CLEAN_SYNC    | true/false                                          | Will remove titles from VOD folders that are not present in m3u.                                              | false                                        | false                               |
 | MIN_SOURCE_RATIO | 0 to 1                                           | With CLEAN_SYNC, a provider whose playlist shrank below this share of its previous run is treated as unavailable and its titles are kept | 0.5                      | 0.5                                 |
+| REMOVE_AFTER_DAYS | number of days                                  | With CLEAN_SYNC, keep a title that disappeared from a working provider for this many days before removing it. 0 removes immediately | 3                 | 0                                   |
 | LIVE_TV       | true/false                                          | Parse live tv streams in m3u urls and creates a single livetv.m3u                                             | true/false                                   | true                                |
 | UNSORTED      | true/false                                          | Creates a VOD folder for undefined streams, either misspelled or poorly labeled streams                       | true/false                                   | false                               |
 | REMOVE_DUPLICATES | true/false                                      | Only writes the first occurrence of a title that resolves to the same .strm file                              | true                                         | true                                |
@@ -206,6 +208,10 @@ Default is set to `CLEAN_SYNC=false`
 **Providers that fail or come back short.** Every .strm remembers which providers supplied it (kept in `logs/library_state.json`, so mount the logs folder). When a provider's playlist cannot be downloaded, is empty, or holds fewer than `MIN_SOURCE_RATIO` of the entries it had on the previous run, that provider is treated as unavailable for the run: its titles are left in place and nothing of its is removed, while other providers still sync normally. A provider that is present and simply no longer lists a title has that title removed straight away, so a few thousand titles dropping out of a large playlist are removed immediately, but a playlist that comes back empty or truncated never wipes the library. If every provider fails the run is aborted before touching anything. Removing a URL from `M3U_URL` is different from a failure: that provider is no longer configured, so its titles are removed on the next run. The log reports each provider's status and how many files were removed or kept. A provider that genuinely shrank below the ratio stays treated as unavailable, because its baseline is only updated on trusted runs; lower `MIN_SOURCE_RATIO` or delete `logs/library_state.json` to accept the smaller playlist as the new baseline.
 
 Default is set to `MIN_SOURCE_RATIO=0.5`
+
+**Aging out titles.** Removal of a title that a working provider no longer lists is immediate by default. Set `REMOVE_AFTER_DAYS` to a number of days to keep such titles for a grace period first: each .strm remembers when it was last listed, and it is only removed once it has been missing for that many days. A title that comes back within the period simply carries on. This only applies to providers that are present; titles of an unavailable provider are always kept regardless.
+
+Default is set to `REMOVE_AFTER_DAYS=0`
 
 ### LIVE TV STREAMS
 

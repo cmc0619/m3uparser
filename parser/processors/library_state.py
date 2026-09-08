@@ -131,19 +131,30 @@ def record_run(state, written, status, today=None):
             sources[label] = {'entries': 0, 'd': ''}
 
 
+def days_since(day_str, today):
+    """Days between an ISO date string and ``today``; None when the string is unusable."""
+    try:
+        return (date.fromisoformat(today) - date.fromisoformat(day_str)).days
+    except (TypeError, ValueError):
+        return None
+
+
 def retention_policy(state, status, remove_after_days=0, today=None):
     """Return ``should_remove(rel_path)`` for library files absent from this run.
 
     A file is kept when any provider recorded as supplying it is absent this
     run: nothing is known about what that provider still carries. When every
     supplying provider is present and none lists the title any more, the
-    file is removed. Files the state knows nothing about follow the old
-    CLEAN_SYNC behaviour and are removed.
+    file is removed, unless ``remove_after_days`` is set and the title was
+    last seen fewer than that many days ago, in which case it is kept a
+    little longer in case it comes back. Files the state knows nothing about
+    follow the old CLEAN_SYNC behaviour and are removed.
 
     ``should_remove.stats`` counts the decisions taken.
     """
     files = state.get('files', {})
-    stats = {'removed': 0, 'kept_absent_source': 0}
+    today = today or today_str()
+    stats = {'removed': 0, 'kept_absent_source': 0, 'kept_aging': 0}
 
     def should_remove(rel_path):
         info = files.get(rel_path)
@@ -154,6 +165,11 @@ def retention_policy(state, status, remove_after_days=0, today=None):
             source = status.get(label)
             if source is not None and not source['present']:
                 stats['kept_absent_source'] += 1
+                return False
+        if remove_after_days > 0:
+            age = days_since(info.get('d', ''), today)
+            if age is not None and age < remove_after_days:
+                stats['kept_aging'] += 1
                 return False
         stats['removed'] += 1
         return True
@@ -168,7 +184,8 @@ def report_retention(should_remove):
     if stats is None:
         return
     print(f"Retention: removed {stats['removed']} files no longer listed by their provider, "
-          f"kept {stats['kept_absent_source']} files whose provider was unavailable")
+          f"kept {stats['kept_absent_source']} files whose provider was unavailable, "
+          f"kept {stats.get('kept_aging', 0)} files still inside REMOVE_AFTER_DAYS")
 
 
 def prune_state(state, local_root):

@@ -23,6 +23,8 @@ services:
       - CLEAN_SYNC=true
       # A provider returning fewer than this share of last run's entries is treated as down and none of its titles are removed.
       - MIN_SOURCE_RATIO=0.5
+      # Keep a title that vanished from a working provider this many days before removing it. 0 removes immediately.
+      - REMOVE_AFTER_DAYS=0
       # Drop non-English groups. Terms are matched literally as whole words, so no backslash
       # escaping is needed, and there must be no space between = and the opening quote.
       - EXCLUDE_TERMS="AF|, AL|, ALB|, AR|, BG|, BR|, CH|, DE|, DK|, ES|, EXYU|, FR|, GR|, HU|, IL|, IN|, IR|, IT|, JP|, KO|, KURDISH, LT|, MY|, NL|, PH|, PK|, PL|, PT|, RO|, RU|, SW|, TH|, TR|, INDIA"

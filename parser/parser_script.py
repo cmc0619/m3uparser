@@ -43,7 +43,7 @@ def main():
         live_tv_entries = [entry for entry in entries if entry.get('livetv') and not entry.get('exclude')]
         vars(process_live_tv_entries, variables_all, live_tv_entries, 'livetv_file')
         # Sync items from VOD m3us to local directories & Move livetv.m3u, keeping titles of unavailable providers
-        should_remove = retention_policy(state, source_status)
+        should_remove = vars(retention_policy, variables_all, state, source_status, 'remove_after_days')
         vars(sync_directories, variables_all, 'movies_dir', 'local_mov_dir', 'remove_sync', should_remove=should_remove,
              root='local_vods_dir')
         vars(sync_directories, variables_all, 'tv_dir', 'local_tv_dir', 'remove_sync', should_remove=should_remove,

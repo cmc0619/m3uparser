@@ -171,7 +171,7 @@ class RetentionPolicyTests(unittest.TestCase):
         """A file the state has never heard of follows the old CLEAN_SYNC behaviour."""
         should_remove = retention_policy({'files': {}}, {})
         self.assertTrue(should_remove('Movie_VOD/unknown.strm'))
-        self.assertEqual(should_remove.stats, {'removed': 1, 'kept_absent_source': 0})
+        self.assertEqual(should_remove.stats, {'removed': 1, 'kept_absent_source': 0, 'kept_aging': 0})
 
     def test_path_whose_source_is_absent_is_kept(self):
         """A file supplied by a provider currently marked absent is not removed."""
@@ -179,7 +179,7 @@ class RetentionPolicyTests(unittest.TestCase):
         status = {'chico': {'present': False, 'count': 0, 'previous': 5, 'reason': 'playlist was empty'}}
         should_remove = retention_policy(state, status)
         self.assertFalse(should_remove('Movie_VOD/x.strm'))
-        self.assertEqual(should_remove.stats, {'removed': 0, 'kept_absent_source': 1})
+        self.assertEqual(should_remove.stats, {'removed': 0, 'kept_absent_source': 1, 'kept_aging': 0})
 
     def test_path_whose_source_is_present_is_removed(self):
         """A file whose only supplying provider is present and trusted is removed."""
@@ -187,14 +187,14 @@ class RetentionPolicyTests(unittest.TestCase):
         status = {'chico': {'present': True, 'count': 5, 'previous': 5, 'reason': 'ok'}}
         should_remove = retention_policy(state, status)
         self.assertTrue(should_remove('Movie_VOD/x.strm'))
-        self.assertEqual(should_remove.stats, {'removed': 1, 'kept_absent_source': 0})
+        self.assertEqual(should_remove.stats, {'removed': 1, 'kept_absent_source': 0, 'kept_aging': 0})
 
     def test_source_missing_from_status_entirely_is_removed(self):
         """A provider dropped from the config altogether is treated as removed, not absent."""
         state = {'files': {'Movie_VOD/x.strm': {'s': ['oldprovider'], 'd': '2026-01-01'}}}
         should_remove = retention_policy(state, {})
         self.assertTrue(should_remove('Movie_VOD/x.strm'))
-        self.assertEqual(should_remove.stats, {'removed': 1, 'kept_absent_source': 0})
+        self.assertEqual(should_remove.stats, {'removed': 1, 'kept_absent_source': 0, 'kept_aging': 0})
 
 
 class PruneStateTests(unittest.TestCase):
