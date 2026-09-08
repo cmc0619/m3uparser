@@ -22,6 +22,7 @@ services:
       - INCLUDE_TERMS= # Optional, only keep streams that contain one of the defined values in group-title, tvg-name or #EXTGRP
       - FILTER_LIVE_TV= # Default is false, true will apply INCLUDE_TERMS/EXCLUDE_TERMS to live tv channels as well
       - REMOVE_DUPLICATES= # Default is true, only writes the first occurrence of a title that shows up in more than one group
+      - DUPLICATE_VERSIONS= # Default is false, true keeps every provider's copy of a title as a Jellyfin version instead of only the first
       - REMOVE_TERMS= # Optional, add more/different remove term values, does not override the defaults
       - REPLACE_TERMS= # Optional, add more/different replace values, does not override the defaults
       - CLEANERS= # Optional, add more/different cleaner values, does not override the defaults
@@ -59,6 +60,7 @@ services:
 | LIVE_TV       | true/false                                          | Parse live tv streams in m3u urls and creates a single livetv.m3u                                             | true/false                                   | true                                |
 | UNSORTED      | true/false                                          | Creates a VOD folder for undefined streams, either misspelled or poorly labeled streams                       | true/false                                   | false                               |
 | REMOVE_DUPLICATES | true/false                                      | Only writes the first occurrence of a title that resolves to the same .strm file                              | true                                         | true                                |
+| DUPLICATE_VERSIONS | true/false                                     | Write one ` - provider` version file per provider for titles carried by several M3U_URLs, so Jellyfin shows one title with a version picker | false                     | false                               |
 
 ## Instalation Process
 
@@ -158,6 +160,21 @@ Providers often deliver the same title in several groups (for example `EN - Movi
 The summary printed at the end of each run shows the number of entries dropped by `INCLUDE_TERMS`/`EXCLUDE_TERMS` and the number of duplicates skipped.
 
 Default is set to `REMOVE_DUPLICATES=true`
+
+### DUPLICATE_VERSIONS
+
+With more than one `M3U_URL`, `REMOVE_DUPLICATES` keeps only the first provider's stream for a title the providers share. Set `DUPLICATE_VERSIONS=true` to keep every provider's stream instead. Each .strm is then written with a ` - <provider>` suffix, using the names from `M3U_LABELS` or the URL hostname, and all providers' files for one title share the folder and base name of the first provider that listed it:
+
+```
+Movie_VOD/Tangled (2010)/Tangled (2010) - chicotv.strm
+Movie_VOD/Tangled (2010)/Tangled (2010) - alphax8k.strm
+TV_VOD/Acapulco (2021)/Season 01/Acapulco (2021) S01E01 - chicotv.strm
+TV_VOD/Acapulco (2021)/Season 01/Acapulco (2021) S01E01 - alphax8k.strm
+```
+
+Jellyfin shows such a folder as one title with a version picker, so a stream that fails on one provider can be switched to the other without a second library entry. Jellyfin does not fail over on its own; the version to play is chosen by you, and the first listed provider is the default. Repeats within the same provider are still skipped. Turning this on renames every existing .strm once, which Jellyfin treats as a library change on the next scan.
+
+Default is set to `DUPLICATE_VERSIONS=false`
 
 ### BYPASS_HEADER
 

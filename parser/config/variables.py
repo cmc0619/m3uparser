@@ -114,6 +114,7 @@ def variables_all(process_env_variable, str_to_bool, process_env_special, *args)
         'INCLUDE_TERM': process_env_variable(os.getenv('INCLUDE_TERMS', "")),
         'filter_live_tv': str_to_bool(os.getenv('FILTER_LIVE_TV', "")),
         'remove_duplicates': str_to_bool(os.getenv('REMOVE_DUPLICATES') or "True"),
+        'duplicate_versions': str_to_bool(os.getenv('DUPLICATE_VERSIONS', "")),
         'REMOVE_TERMS': process_env_variable(os.getenv('REMOVE_TERMS', "")),
         'REMOVE_DEFAULTS': process_env_variable(os.getenv('REMOVE_DEFAULTS', "")),
         'REPLACE_TERMS': process_env_special(os.getenv('REPLACE_TERMS', "")),

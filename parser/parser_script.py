@@ -31,8 +31,8 @@ def main():
                                'REPLACE_TERMS', 'REPLACE_DEFAULTS', 'SCRUB_HEADER', 'SCRUB_DEFAULTS', 'REMOVE_TERMS',
                                'REMOVE_DEFAULTS', 'EXCLUDE_TERM', 'INCLUDE_TERM', 'filter_live_tv')
         # Process each entry dictionary and track created .strm files
-        vars(proc_entries, variables_all, entries, errors, 'tv_dir', 'movies_dir', 'unsorted_dir',
-             'remove_duplicates')
+        written = vars(proc_entries, variables_all, entries, errors, 'tv_dir', 'movies_dir', 'unsorted_dir',
+                       'remove_duplicates', 'duplicate_versions')
         # Extract live TV entries and process them separately
         live_tv_entries = [entry for entry in entries if entry.get('livetv') and not entry.get('exclude')]
         vars(process_live_tv_entries, variables_all, live_tv_entries, 'livetv_file')

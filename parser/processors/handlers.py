@@ -90,7 +90,16 @@ def strm_path_for_entry(entry, tv_dir, movies_dir, unsorted_dir):
     return None
 
 
-def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors, seen_paths=None):
+def version_path(strm_file, label):
+    """Return ``strm_file`` with a `` - <label>`` version suffix before the extension."""
+    if not label:
+        return strm_file
+    stem, ext = os.path.splitext(strm_file)
+    return f'{stem} - {label}{ext}'
+
+
+def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors, seen_paths=None,
+                 canonical_paths=None):
     """Write the .strm file for a single entry and return its path.
 
     When ``seen_paths`` is a set, it is used to de-duplicate entries: if the
@@ -98,6 +107,12 @@ def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors,
     compared through ``dedupe_key`` (case, punctuation and spacing
     insensitive), the entry is flagged ``duplicate=True`` and skipped. The
     first occurrence in the m3u wins.
+
+    When ``canonical_paths`` is a dict, versions mode is on: the first path
+    seen for a title becomes the folder and base name for every provider,
+    each provider's file gets a `` - <source>`` suffix so Jellyfin groups them
+    as versions of one title, and only repeats from the same provider are
+    skipped as duplicates.
     """
     try:
         strm_file = strm_path_for_entry(entry, tv_dir, movies_dir, unsorted_dir)
@@ -105,6 +120,11 @@ def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors,
             return None
 
         key = dedupe_key(strm_file)
+        if canonical_paths is not None:
+            strm_file = canonical_paths.setdefault(key, strm_file)
+            label = entry.get('source', '')
+            strm_file = version_path(strm_file, label)
+            key = f'{key}|{label}'
         if seen_paths is not None and key in seen_paths:
             entry['duplicate'] = True
             return None
@@ -128,31 +148,36 @@ def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors,
         return None
 
 
-def proc_entries(entries, errors, tv_dir, movies_dir, unsorted_dir, remove_duplicates=True):
-    """Write .strm files for all entries.
+def proc_entries(entries, errors, tv_dir, movies_dir, unsorted_dir, remove_duplicates=True, duplicate_versions=False):
+    """Write .strm files for all entries and return ``{written path: source label}``.
 
     With ``remove_duplicates`` enabled (the default), titles that resolve to
     the same .strm path after all cleaning and replacements are only written
     once, so a title delivered in several m3u groups shows up a single time
     in Jellyfin.
+
+    With ``duplicate_versions`` enabled, a title carried by several providers
+    is written once per provider as `` - <provider>`` version files in one
+    folder instead of keeping only the first provider's stream.
     """
     tv_strm_files = []
     movie_strm_files = []
     unsorted_strm_files = []
-    seen_paths = set() if remove_duplicates else None
+    written = {}
+    seen_paths = set() if (remove_duplicates or duplicate_versions) else None
+    canonical_paths = {} if duplicate_versions else None
     for entry in entries:
-        strm_file = handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors, seen_paths)
+        strm_file = handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors, seen_paths,
+                                 canonical_paths)
         if strm_file:
+            written[strm_file] = entry.get('source', '')
             if entry.get('tv_show'):
                 tv_strm_files.append(strm_file)
             elif entry.get('movie'):
                 movie_strm_files.append(strm_file)
             elif entry.get('unsorted'):
                 unsorted_strm_files.append(strm_file)
-    # Print the final parsed dictionaries
-    # print("\nFinal parsed dictionaries:")
-    # for d in entries:
-        # print(d)
+    return written
 
 
 def move_files(file_path, destination_path):

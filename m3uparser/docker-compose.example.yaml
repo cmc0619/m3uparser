@@ -30,6 +30,8 @@ services:
       - FILTER_LIVE_TV=false
       # Write a title once even when it is delivered in several groups.
       - REMOVE_DUPLICATES=true
+      # Keep every provider's copy of a shared title as a Jellyfin version file instead of only the first.
+      - DUPLICATE_VERSIONS=false
       # Strip the EN| tag from titles.
       - REMOVE_TERMS="EN|"
       - LIVE_TV=false
