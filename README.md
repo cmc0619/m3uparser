@@ -28,6 +28,7 @@ services:
       - REPLACE_TERMS= # Optional, add more/different replace values, does not override the defaults
       - CLEANERS= # Optional, add more/different cleaner values, does not override the defaults
       - CLEAN_SYNC= # If set to true will remove titles from VOD folders that are not present in m3u files, Defaults to false if blank.
+      - MIN_SOURCE_RATIO= # Default 0.5, a provider returning fewer than this share of last run's entries is treated as down and nothing of its is removed
       - LIVE_TV= # Default is true, true will make a combined livetv.m3u from all live tv streams found in m3u files. Will be placed in /VODS/Live_TV 
       - UNSORTED= # Default is false, true will put at /VODS/Unsorted_VOD
       - JELLYFIN_URL= # Requires a Jellyfin server to be running. http://<jfin_url:8096> DO NOT use quotes around server url.
@@ -58,6 +59,7 @@ services:
 | CLEANERS      | series,movie,tv,unsorted                            | Type of stream to apply REMOVE_TERMS value to                                                                 | tv, movies                                   | tv                                  |
 | REFRESH_LIB   | true/false                                          | Refresh Jellyfin libraries after parsing                                                                      | false                                        | false                               |
 | CLEAN_SYNC    | true/false                                          | Will remove titles from VOD folders that are not present in m3u.                                              | false                                        | false                               |
+| MIN_SOURCE_RATIO | 0 to 1                                           | With CLEAN_SYNC, a provider whose playlist shrank below this share of its previous run is treated as unavailable and its titles are kept | 0.5                      | 0.5                                 |
 | LIVE_TV       | true/false                                          | Parse live tv streams in m3u urls and creates a single livetv.m3u                                             | true/false                                   | true                                |
 | UNSORTED      | true/false                                          | Creates a VOD folder for undefined streams, either misspelled or poorly labeled streams                       | true/false                                   | false                               |
 | REMOVE_DUPLICATES | true/false                                      | Only writes the first occurrence of a title that resolves to the same .strm file                              | true                                         | true                                |
@@ -187,7 +189,7 @@ Providers name shows differently: one lists `Acapulco S01E01`, another `4K-A+ - 
 - when the group has two or more different years, such as `Battlestar Galactica (1978)` and `(2004)`, those stay separate and a copy with no year is left alone rather than guessed into either.
 - when the group has two or more different country tags, such as `The Office (US)` and `The Office (UK)`, they are different shows: each keeps its tag and year, as in `The Office (US) (2005)`, and an untagged copy is left alone.
 
-The first listed provider decides the spelling of the name. Only shows are affected; movies already carry their year. The first run after enabling this renames existing show folders once. Combine with `DUPLICATE_VERSIONS=true` to keep each provider's stream of an episode as a version in the shared folder.
+The first listed provider decides the spelling of the name. The year chosen for a show is remembered in `logs/library_state.json`, so when the provider that supplies it is unavailable for a run the folder keeps its name instead of losing the year and coming back later. Only shows are affected; movies already carry their year. The first run after enabling this renames existing show folders once. Combine with `DUPLICATE_VERSIONS=true` to keep each provider's stream of an episode as a version in the shared folder.
 
 Default is set to `MERGE_SHOW_YEARS=false`
 
@@ -200,6 +202,10 @@ Setting this to true will have the script download the m3u urls regardless if it
 If this is set to true, then every time a parsing of m3u urls is complete, it will add new content from the m3u urls to your VOD libraries, and any content in your VOD libraries that is not in the m3u urls will be removed. This should be used with caution, if you add and remove m3u urls from the env variable often, then this will remove content from the VOD library. If your provider removes content often and you want to keep your VOD libraries in sync with what is available, then setting this to true is useful.
 
 Default is set to `CLEAN_SYNC=false`
+
+**Providers that fail or come back short.** Every .strm remembers which providers supplied it (kept in `logs/library_state.json`, so mount the logs folder). When a provider's playlist cannot be downloaded, is empty, or holds fewer than `MIN_SOURCE_RATIO` of the entries it had on the previous run, that provider is treated as unavailable for the run: its titles are left in place and nothing of its is removed, while other providers still sync normally. A provider that is present and simply no longer lists a title has that title removed straight away, so a few thousand titles dropping out of a large playlist are removed immediately, but a playlist that comes back empty or truncated never wipes the library. If every provider fails the run is aborted before touching anything. Removing a URL from `M3U_URL` is different from a failure: that provider is no longer configured, so its titles are removed on the next run. The log reports each provider's status and how many files were removed or kept. A provider that genuinely shrank below the ratio stays treated as unavailable, because its baseline is only updated on trusted runs; lower `MIN_SOURCE_RATIO` or delete `logs/library_state.json` to accept the smaller playlist as the new baseline.
+
+Default is set to `MIN_SOURCE_RATIO=0.5`
 
 ### LIVE TV STREAMS
 

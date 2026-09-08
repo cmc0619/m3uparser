@@ -32,7 +32,7 @@ def split_show_title(title):
     return base, year, country
 
 
-def merge_show_years(entries, enabled=True):
+def merge_show_years(entries, enabled=True, known_years=None):
     """Give every provider's episodes of a show one folder name, with a year when known.
 
     Series and television entries are grouped by their show title with the
@@ -53,9 +53,17 @@ def merge_show_years(entries, enabled=True):
 
     The base name comes from the first member seen, so the first listed
     provider decides spelling. Does nothing when ``enabled`` is False.
+
+    ``known_years`` is a dict of show key to year remembered from earlier
+    runs (kept in the library state). A group with no year this run falls
+    back to its remembered year, so folders do not change name while the
+    provider that supplies the year is unavailable, and the dict is updated
+    in place with every year resolved this run.
     """
     if not enabled:
         return entries
+    if known_years is None:
+        known_years = {}
 
     groups = {}
     for entry in entries:
@@ -76,9 +84,16 @@ def merge_show_years(entries, enabled=True):
         years = group['years']
         if len(group['countries']) > 1:
             # Different country tags mean different shows: keep them apart and never guess a year
+            known_years.pop(key, None)
             for entry, year, country in group['members']:
                 entry['show_title'] = base + (f" ({country})" if country else '') + (f" ({year})" if year else '')
             continue
+        if not years and known_years.get(key):
+            years = {known_years[key]}
+        if len(years) == 1:
+            known_years[key] = next(iter(years))
+        elif key in known_years:
+            del known_years[key]
         for entry, year, _country in group['members']:
             if len(years) == 1:
                 entry['show_title'] = f"{base} ({next(iter(years))})"

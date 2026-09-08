@@ -103,7 +103,7 @@ class ProcEntriesVersionsModeTests(TempDirsMixin, unittest.TestCase):
         self.assertEqual(files[os.path.join(expected_dir, 'Tangled (2010) - alphax8k.strm')], 'http://x/alpha')
         self.assertFalse(entries[0].get('duplicate'))
         self.assertFalse(entries[1].get('duplicate'))
-        self.assertEqual(set(written.values()), {'chicotv', 'alphax8k'})
+        self.assertEqual({tuple(v) for v in written.values()}, {('chicotv',), ('alphax8k',)})
 
     def test_same_source_repeat_is_flagged_and_skipped(self):
         """A second entry from the SAME source for the same title is a duplicate, not a new version."""
@@ -137,7 +137,7 @@ class ProcEntriesVersionsModeTests(TempDirsMixin, unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(self.strm_files(), {os.path.join('Movie_VOD', 'Get Gotti (2023)', 'Get Gotti (2023).strm'):
                                              'http://x/1'})
-        self.assertEqual(list(written.values()), [''])
+        self.assertEqual(list(written.values()), [[]])
 
     def test_excluded_entry_produces_no_file(self):
         """Entries flagged exclude=True still produce no file in versions mode."""
@@ -150,15 +150,15 @@ class ProcEntriesVersionsModeTests(TempDirsMixin, unittest.TestCase):
         self.assertFalse(excluded.get('duplicate'))
 
     def test_written_mapping_covers_every_file_with_its_source(self):
-        """proc_entries returns {written path: source label} for every file it wrote."""
+        """proc_entries returns {written path: [source labels]} for every file it wrote."""
         entries = [movie('Tangled', '2010', 'http://x/chico', source='chicotv'),
                    movie('TANGLED', '2010', 'http://x/alpha', source='alphax8k')]
         written, errors = self.run_entries(entries)
         self.assertEqual(errors, [])
         self.assertEqual(len(written), 2)
         base = os.path.join(self.movies_dir, 'Tangled (2010)')
-        self.assertEqual(written[os.path.join(base, 'Tangled (2010) - chicotv.strm')], 'chicotv')
-        self.assertEqual(written[os.path.join(base, 'Tangled (2010) - alphax8k.strm')], 'alphax8k')
+        self.assertEqual(written[os.path.join(base, 'Tangled (2010) - chicotv.strm')], ['chicotv'])
+        self.assertEqual(written[os.path.join(base, 'Tangled (2010) - alphax8k.strm')], ['alphax8k'])
         for path in written:
             self.assertTrue(os.path.isfile(path))
 
@@ -174,7 +174,7 @@ class ProcEntriesNormalModeTests(TempDirsMixin, unittest.TestCase):
         return written, errors
 
     def test_second_providers_copy_is_skipped_as_duplicate(self):
-        """With versions mode off, only the first provider's stream is written; no suffix is added."""
+        """With versions mode off, only the first provider's stream is written, but both providers are recorded."""
         entries = [movie('Tangled', '2010', 'http://x/chico', source='chicotv'),
                    movie('TANGLED', '2010', 'http://x/alpha', source='alphax8k')]
         written, errors = self.run_entries(entries)
@@ -183,7 +183,7 @@ class ProcEntriesNormalModeTests(TempDirsMixin, unittest.TestCase):
         self.assertEqual(self.strm_files(), {expected_path: 'http://x/chico'})
         self.assertFalse(entries[0].get('duplicate'))
         self.assertTrue(entries[1].get('duplicate'))
-        self.assertEqual(list(written.values()), ['chicotv'])
+        self.assertEqual(list(written.values()), [['chicotv', 'alphax8k']])
 
     def test_written_mapping_has_no_suffix_in_normal_mode(self):
         """The returned mapping's paths carry no `` - source`` suffix outside versions mode."""
@@ -191,7 +191,7 @@ class ProcEntriesNormalModeTests(TempDirsMixin, unittest.TestCase):
         written, errors = self.run_entries(entries)
         self.assertEqual(errors, [])
         expected = os.path.join(self.movies_dir, 'Get Gotti (2023)', 'Get Gotti (2023).strm')
-        self.assertEqual(written, {expected: 'chicotv'})
+        self.assertEqual(written, {expected: ['chicotv']})
 
 
 if __name__ == '__main__':

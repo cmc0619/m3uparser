@@ -228,6 +228,15 @@ class SourceTaggingTests(unittest.TestCase):
             self.assertEqual(f.read(), 'http://alpha/Tangled_(2010)')
         self.assertTrue(entries[2].get('duplicate'))
 
+    def test_every_provider_of_a_shared_title_is_recorded(self):
+        """The written file lists both providers, so it is only removed once both drop the title."""
+        entries = self.parse(self.combined_file())
+        movies = os.path.join(self.tmp.name, 'Movie_VOD')
+        written = proc_entries(entries, [], os.path.join(self.tmp.name, 'TV_VOD'), movies,
+                               os.path.join(self.tmp.name, 'Unsorted_VOD'))
+        self.assertEqual(written[os.path.join(movies, 'Tangled (2010)', 'Tangled (2010).strm')], ['alphax8k', 'chicotv'])
+        self.assertEqual(written[os.path.join(movies, 'Alpha Only (2019)', 'Alpha Only (2019).strm')], ['alphax8k'])
+
 
 if __name__ == '__main__':
     unittest.main()

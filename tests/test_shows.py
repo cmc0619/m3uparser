@@ -166,8 +166,10 @@ class CountryConflictTests(unittest.TestCase):
     def test_year_is_not_shared_across_countries(self):
         """A year known only for one country is not applied to the other, and an untagged copy is left alone."""
         entries = self.entries('The Office (US) (2005)', 'The Office (UK)', 'The Office')
-        merge_show_years(entries)
+        known = {'the office': '2005'}
+        merge_show_years(entries, True, known)
         self.assertEqual([e['show_title'] for e in entries], ['The Office (US) (2005)', 'The Office (UK)', 'The Office'])
+        self.assertNotIn('the office', known)
 
     def test_single_country_tag_is_still_dropped(self):
         """With only one country tag in the group the tag is removed as before."""
@@ -181,6 +183,53 @@ class CountryConflictTests(unittest.TestCase):
         merge_show_years(entries)
         paths = {strm_path_for_entry(e, 'TV_VOD', 'Movie_VOD', 'Unsorted_VOD') for e in entries}
         self.assertEqual(len(paths), 2)
+
+
+class KnownYearsTests(unittest.TestCase):
+    """merge_show_years remembers resolved years so folders stay stable across provider outages."""
+
+    def entries(self, *titles):
+        """Series entries for the given show titles."""
+        return [{'series': True, 'tv_show': True, 'show_title': t, 'season': '01', 'season_episode': 'S01E01'}
+                for t in titles]
+
+    def test_remembered_year_is_used_when_no_provider_supplies_one(self):
+        """A show seen without a year takes the year remembered from an earlier run."""
+        known = {'acapulco': '2021'}
+        entries = self.entries('Acapulco')
+        merge_show_years(entries, True, known)
+        self.assertEqual(entries[0]['show_title'], 'Acapulco (2021)')
+
+    def test_resolved_year_is_recorded(self):
+        """A group that resolves to one year writes it into known_years."""
+        known = {}
+        merge_show_years(self.entries('Acapulco', 'Acapulco (2021) (US)'), True, known)
+        self.assertEqual(known, {'acapulco': '2021'})
+
+    def test_current_year_wins_over_remembered_year(self):
+        """A year supplied this run replaces a stale remembered one."""
+        known = {'acapulco': '2019'}
+        entries = self.entries('Acapulco (2021)')
+        merge_show_years(entries, True, known)
+        self.assertEqual(entries[0]['show_title'], 'Acapulco (2021)')
+        self.assertEqual(known['acapulco'], '2021')
+
+    def test_ambiguous_group_forgets_remembered_year(self):
+        """Two different years this run drop any remembered year and leave the bare title alone."""
+        known = {'battlestar galactica': '2004'}
+        entries = self.entries('Battlestar Galactica', 'Battlestar Galactica (1978)', 'Battlestar Galactica (2004)')
+        merge_show_years(entries, True, known)
+        self.assertEqual([e['show_title'] for e in entries],
+                         ['Battlestar Galactica', 'Battlestar Galactica (1978)', 'Battlestar Galactica (2004)'])
+        self.assertNotIn('battlestar galactica', known)
+
+    def test_disabled_leaves_known_years_untouched(self):
+        """With the option off nothing is learned or applied."""
+        known = {'acapulco': '2021'}
+        entries = self.entries('Acapulco')
+        merge_show_years(entries, False, known)
+        self.assertEqual(entries[0]['show_title'], 'Acapulco')
+        self.assertEqual(known, {'acapulco': '2021'})
 
 
 if __name__ == '__main__':

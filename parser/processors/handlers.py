@@ -149,12 +149,14 @@ def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors,
 
 
 def proc_entries(entries, errors, tv_dir, movies_dir, unsorted_dir, remove_duplicates=True, duplicate_versions=False):
-    """Write .strm files for all entries and return ``{written path: source label}``.
+    """Write .strm files for all entries and return ``{written path: [source labels]}``.
 
     With ``remove_duplicates`` enabled (the default), titles that resolve to
     the same .strm path after all cleaning and replacements are only written
     once, so a title delivered in several m3u groups shows up a single time
-    in Jellyfin.
+    in Jellyfin. Every provider whose copy resolved to a written file is
+    listed against it, including providers whose copy was skipped as a
+    duplicate, so the file is only removed once all of them drop the title.
 
     With ``duplicate_versions`` enabled, a title carried by several providers
     is written once per provider as `` - <provider>`` version files in one
@@ -164,19 +166,33 @@ def proc_entries(entries, errors, tv_dir, movies_dir, unsorted_dir, remove_dupli
     movie_strm_files = []
     unsorted_strm_files = []
     written = {}
+    key_to_path = {}
     seen_paths = set() if (remove_duplicates or duplicate_versions) else None
     canonical_paths = {} if duplicate_versions else None
     for entry in entries:
         strm_file = handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors, seen_paths,
                                  canonical_paths)
+        label = entry.get('source', '')
         if strm_file:
-            written[strm_file] = entry.get('source', '')
+            labels = written.setdefault(strm_file, [])
+            if label and label not in labels:
+                labels.append(label)
+            key_to_path[dedupe_key(strm_file)] = strm_file
             if entry.get('tv_show'):
                 tv_strm_files.append(strm_file)
             elif entry.get('movie'):
                 movie_strm_files.append(strm_file)
             elif entry.get('unsorted'):
                 unsorted_strm_files.append(strm_file)
+        elif entry.get('duplicate') and canonical_paths is None and label:
+            # The duplicate's provider also supplies the title that was written first
+            try:
+                own_path = strm_path_for_entry(entry, tv_dir, movies_dir, unsorted_dir)
+            except Exception:
+                own_path = None
+            canonical = key_to_path.get(dedupe_key(own_path)) if own_path else None
+            if canonical and label not in written[canonical]:
+                written[canonical].append(label)
     return written
 
 
@@ -395,8 +411,33 @@ def prepare_m3us(URLS, m3u_dir, m3u_file_path, skip_header=None, M3U_LABELS=None
 #     print(f"All files have been combined into {m3u_file_path}")
 
 
+def prune_tree(path, root, should_remove):
+    """Remove files under ``path`` that ``should_remove`` approves; drop directories left empty.
+
+    ``should_remove`` receives each file's path relative to ``root``.
+    """
+    if os.path.isfile(path):
+        if should_remove(os.path.relpath(path, root)):
+            os.remove(path)
+            print(f"Removed file: {path}")
+        return
+    if os.path.isdir(path):
+        for item in os.listdir(path):
+            prune_tree(os.path.join(path, item), root, should_remove)
+        if not os.listdir(path):
+            os.rmdir(path)
+            print(f"Removed directory: {path}")
+
+
 # sync_directories with remove from src if not in dest
-def sync_directories(src, dest, remove_sync):
+def sync_directories(src, dest, remove_sync, should_remove=None, root=None):
+    """Copy new and changed files from ``src`` into ``dest``.
+
+    With ``remove_sync`` True, files and folders in ``dest`` that are not in
+    ``src`` are removed. When ``should_remove`` is given it is consulted for
+    every such file (with its path relative to ``root``), so files whose
+    provider was unavailable this run can be kept.
+    """
     if remove_sync:
         for item in os.listdir(src):
             src_item = os.path.join(src, item)
@@ -406,7 +447,7 @@ def sync_directories(src, dest, remove_sync):
                 if not os.path.exists(dest_item):
                     os.makedirs(dest_item)
                     # print(f"Created directory: {dest_item}")
-                sync_directories(src_item, dest_item, remove_sync)
+                sync_directories(src_item, dest_item, remove_sync, should_remove, root)
             elif os.path.isfile(src_item):
                 if not os.path.exists(dest_item):
                     shutil.copy2(src_item, dest_item)
@@ -424,7 +465,9 @@ def sync_directories(src, dest, remove_sync):
             src_item = os.path.join(src, item)
 
             if not os.path.exists(src_item):
-                if os.path.isdir(dest_item):
+                if should_remove is not None and root is not None:
+                    prune_tree(dest_item, root, should_remove)
+                elif os.path.isdir(dest_item):
                     shutil.rmtree(dest_item)
                     print(f"Removed directory: {dest_item}")
                 elif os.path.isfile(dest_item):
