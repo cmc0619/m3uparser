@@ -27,6 +27,27 @@ def process_live_tv_entries(entries, livetv_file):
                 f.write(stream_url_line + '\n')
 
 
+DEDUPE_DROP = re.compile(r"[:;,.!?'\"`]")
+DEDUPE_SPACE = re.compile(r'[\s_\-]+')
+
+
+def dedupe_key(path):
+    """Return the key used to decide whether two .strm paths are the same title.
+
+    Each path component is lower-cased, common punctuation (``: ; , . ! ? ' "``)
+    is dropped, and hyphens, underscores and runs of whitespace collapse to a
+    single space. ``Avatar: The Last Airbender`` and ``Avatar the Last
+    Airbender`` therefore share a key, as do ``Cook Off`` and ``Cook-Off!``.
+    Other characters are kept, so ``18`` and ``18½`` stay distinct.
+    """
+    parts = []
+    for part in path.replace('\\', '/').split('/'):
+        part = DEDUPE_DROP.sub('', part.lower())
+        part = DEDUPE_SPACE.sub(' ', part).strip()
+        parts.append(part)
+    return '/'.join(parts)
+
+
 def strm_path_for_entry(entry, tv_dir, movies_dir, unsorted_dir):
     """Return the .strm path an entry would be written to, or None if it is skipped.
 
@@ -74,16 +95,17 @@ def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors,
 
     When ``seen_paths`` is a set, it is used to de-duplicate entries: if the
     final (fully cleaned) .strm path was already produced during this run,
-    compared case-insensitively, the entry is flagged ``duplicate=True`` and
-    skipped. The first occurrence in the m3u wins.
+    compared through ``dedupe_key`` (case, punctuation and spacing
+    insensitive), the entry is flagged ``duplicate=True`` and skipped. The
+    first occurrence in the m3u wins.
     """
     try:
         strm_file = strm_path_for_entry(entry, tv_dir, movies_dir, unsorted_dir)
         if strm_file is None:
             return None
 
-        dedupe_key = strm_file.lower()
-        if seen_paths is not None and dedupe_key in seen_paths:
+        key = dedupe_key(strm_file)
+        if seen_paths is not None and key in seen_paths:
             entry['duplicate'] = True
             return None
 
@@ -96,7 +118,7 @@ def handle_entry(entry, tv_dir, movies_dir, unsorted_dir, write_to_file, errors,
         # Only remember the path once the file exists, so a failed first write
         # does not make later occurrences of the same title look like duplicates
         if seen_paths is not None:
-            seen_paths.add(dedupe_key)
+            seen_paths.add(key)
         return strm_file
 
     except Exception as e:

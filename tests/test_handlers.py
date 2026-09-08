@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from parser.processors.handlers import handle_entry, proc_entries, strm_path_for_entry
+from parser.processors.handlers import dedupe_key, handle_entry, proc_entries, strm_path_for_entry
 from parser.utils import write_to_file
 
 
@@ -73,6 +73,34 @@ class StrmPathForEntryTests(TempDirsMixin, unittest.TestCase):
         self.assertIsNone(strm_path_for_entry(entry, self.tv_dir, self.movies_dir, self.unsorted_dir))
 
 
+class DedupeKeyTests(unittest.TestCase):
+    """dedupe_key ignores case, common punctuation and spacing but nothing else."""
+
+    def test_punctuation_and_spacing_variants_share_a_key(self):
+        """Colons, commas, hyphens, apostrophes and double spaces do not separate titles."""
+        pairs = [
+            ('TV_VOD/Avatar: The Last Airbender/Season 01/Avatar: The Last Airbender S01E01.strm',
+             'TV_VOD/Avatar the Last Airbender/Season 01/Avatar the Last Airbender S01E01.strm'),
+            ('Movie_VOD/Cook Off (2017)/Cook Off (2017).strm', 'Movie_VOD/Cook-Off! (2017)/Cook-Off! (2017).strm'),
+            ('Movie_VOD/Tangled  (2010)/Tangled  (2010).strm', 'Movie_VOD/tangled (2010)/tangled (2010).strm'),
+            ("TV_VOD/What If...?/Season 01/What If...? S01E01.strm", "TV_VOD/What if?/Season 01/What if? S01E01.strm"),
+            ('TV_VOD/Upstairs, Downstairs/x.strm', 'TV_VOD/Upstairs Downstairs/x.strm'),
+        ]
+        for left, right in pairs:
+            with self.subTest(left=left):
+                self.assertEqual(dedupe_key(left), dedupe_key(right))
+
+    def test_other_characters_still_distinguish_titles(self):
+        """Digits, letters and symbols outside the dropped set keep titles apart."""
+        self.assertNotEqual(dedupe_key('Movie_VOD/18 (2022)/18 (2022).strm'), dedupe_key('Movie_VOD/18½ (2022)/18½ (2022).strm'))
+        self.assertNotEqual(dedupe_key('Movie_VOD/Se7en (1995)/x.strm'), dedupe_key('Movie_VOD/Seven (1995)/x.strm'))
+        self.assertNotEqual(dedupe_key('TV_VOD/The Office (US)/x.strm'), dedupe_key('TV_VOD/The Office/x.strm'))
+
+    def test_path_separators_are_preserved(self):
+        """Folder boundaries still matter, so an episode in another season is not a duplicate."""
+        self.assertNotEqual(dedupe_key('TV_VOD/Show/Season 01/Show S01E01.strm'), dedupe_key('TV_VOD/Show/Season 02/Show S01E01.strm'))
+
+
 class HandleEntryTests(TempDirsMixin, unittest.TestCase):
     """handle_entry writes a single .strm and applies seen_paths de-duplication."""
 
@@ -123,6 +151,16 @@ class HandleEntryTests(TempDirsMixin, unittest.TestCase):
         self.assertFalse(second.get('duplicate'))
         self.assertEqual(self.strm_files(), {os.path.join('Movie_VOD', 'Get Gotti (2023)', 'Get Gotti (2023).strm'):
                                              'http://x/2'})
+
+    def test_punctuation_variant_is_a_duplicate(self):
+        """A title differing only by punctuation is skipped as a duplicate of the first."""
+        errors, seen = [], set()
+        first = movie('Cook Off', '2017', 'http://x/1')
+        second = movie('Cook-Off!', '2017', 'http://x/2')
+        self.assertIsNotNone(handle_entry(first, self.tv_dir, self.movies_dir, self.unsorted_dir, write_to_file, errors, seen))
+        self.assertIsNone(handle_entry(second, self.tv_dir, self.movies_dir, self.unsorted_dir, write_to_file, errors, seen))
+        self.assertTrue(second.get('duplicate'))
+        self.assertEqual(len(self.strm_files()), 1)
 
     def test_excluded_entry_writes_nothing(self):
         """Excluded entries produce no file and no error."""

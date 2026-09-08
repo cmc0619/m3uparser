@@ -153,7 +153,7 @@ Defaults are set to: `EXCLUDE_TERMS=""`, `INCLUDE_TERMS=""`, `FILTER_LIVE_TV=fal
 
 ### REMOVE_DUPLICATES
 
-Providers often deliver the same title in several groups (for example `EN - Movies` and `4K - Movies`). After `SCRUB_HEADER`, `REPLACE_TERMS` and `REMOVE_TERMS` have been applied, if two streams resolve to exactly the same .strm file path (compared case-insensitively) only the first one found in the m3u is written and later ones are skipped, so the title shows up once in Jellyfin. Set `REMOVE_DUPLICATES=false` to restore the old behaviour where the last occurrence overwrote the earlier ones. Live TV channels are never de-duplicated.
+Providers often deliver the same title in several groups (for example `EN - Movies` and `4K - Movies`). After `SCRUB_HEADER`, `REPLACE_TERMS` and `REMOVE_TERMS` have been applied, if two streams resolve to the same .strm file path only the first one found in the m3u is written and later ones are skipped, so the title shows up once in Jellyfin. Paths are compared ignoring case, the punctuation `: ; , . ! ? ' "`, and differences in spacing, hyphens and underscores, so `Avatar: The Last Airbender` and `Avatar the Last Airbender` count as the same title, as do `Cook Off` and `Cook-Off!`. Everything else must match exactly, so `18` and `18½` stay separate. Set `REMOVE_DUPLICATES=false` to restore the old behaviour where the last occurrence overwrote the earlier ones. Live TV channels are never de-duplicated.
 
 The summary printed at the end of each run shows the number of entries dropped by `INCLUDE_TERMS`/`EXCLUDE_TERMS` and the number of duplicates skipped.
 
