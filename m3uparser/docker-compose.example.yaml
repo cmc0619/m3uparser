@@ -32,6 +32,8 @@ services:
       - REMOVE_DUPLICATES=true
       # Keep every provider's copy of a shared title as a Jellyfin version file instead of only the first.
       - DUPLICATE_VERSIONS=false
+      # Name show folders with the year when any provider supplies one, so providers share a folder.
+      - MERGE_SHOW_YEARS=false
       # Strip the EN| tag from titles.
       - REMOVE_TERMS="EN|"
       - LIVE_TV=false

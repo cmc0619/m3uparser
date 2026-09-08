@@ -30,6 +30,8 @@ def main():
         entries, errors = vars(parse_m3u_file, variables_all, 'm3u_file_path', clean_group_title, process_value,
                                'REPLACE_TERMS', 'REPLACE_DEFAULTS', 'SCRUB_HEADER', 'SCRUB_DEFAULTS', 'REMOVE_TERMS',
                                'REMOVE_DEFAULTS', 'EXCLUDE_TERM', 'INCLUDE_TERM', 'filter_live_tv')
+        # Give every provider's episodes of a show one folder name, with a year when any provider supplies one
+        vars(merge_show_years, variables_all, entries, 'merge_show_years')
         # Process each entry dictionary and track created .strm files
         written = vars(proc_entries, variables_all, entries, errors, 'tv_dir', 'movies_dir', 'unsorted_dir',
                        'remove_duplicates', 'duplicate_versions')

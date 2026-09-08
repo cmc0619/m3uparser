@@ -23,6 +23,7 @@ services:
       - FILTER_LIVE_TV= # Default is false, true will apply INCLUDE_TERMS/EXCLUDE_TERMS to live tv channels as well
       - REMOVE_DUPLICATES= # Default is true, only writes the first occurrence of a title that shows up in more than one group
       - DUPLICATE_VERSIONS= # Default is false, true keeps every provider's copy of a title as a Jellyfin version instead of only the first
+      - MERGE_SHOW_YEARS= # Default is false, true names show folders with the year when any provider supplies one so providers share a folder
       - REMOVE_TERMS= # Optional, add more/different remove term values, does not override the defaults
       - REPLACE_TERMS= # Optional, add more/different replace values, does not override the defaults
       - CLEANERS= # Optional, add more/different cleaner values, does not override the defaults
@@ -61,6 +62,7 @@ services:
 | UNSORTED      | true/false                                          | Creates a VOD folder for undefined streams, either misspelled or poorly labeled streams                       | true/false                                   | false                               |
 | REMOVE_DUPLICATES | true/false                                      | Only writes the first occurrence of a title that resolves to the same .strm file                              | true                                         | true                                |
 | DUPLICATE_VERSIONS | true/false                                     | Write one ` - provider` version file per provider for titles carried by several M3U_URLs, so Jellyfin shows one title with a version picker | false                     | false                               |
+| MERGE_SHOW_YEARS | true/false                                       | Put every provider's episodes of a show in one folder, named with the year when any provider supplies it and with country tags removed | false                    | false                               |
 
 ## Instalation Process
 
@@ -175,6 +177,19 @@ TV_VOD/Acapulco (2021)/Season 01/Acapulco (2021) S01E01 - alphax8k.strm
 Jellyfin shows such a folder as one title with a version picker, so a stream that fails on one provider can be switched to the other without a second library entry. Jellyfin does not fail over on its own; the version to play is chosen by you, and the first listed provider is the default. Repeats within the same provider are still skipped. Turning this on renames every existing .strm once, which Jellyfin treats as a library change on the next scan.
 
 Default is set to `DUPLICATE_VERSIONS=false`
+
+### MERGE_SHOW_YEARS
+
+Providers name shows differently: one lists `Acapulco S01E01`, another `4K-A+ - Acapulco (2021) (US) S01E01`. Even after `REMOVE_TERMS` strips the prefix, `Acapulco` and `Acapulco (2021) (US)` are different folders and Jellyfin shows two series. With `MERGE_SHOW_YEARS=true` shows are grouped by their name with the trailing year and `(US)` style country tag removed, and each group gets one folder name:
+
+- when exactly one year is known across the group, every provider's episodes go in `Acapulco (2021)`, which is the name Jellyfin matches best;
+- when no provider supplies a year, the folder is the bare name with any country tag removed;
+- when the group has two or more different years, such as `Battlestar Galactica (1978)` and `(2004)`, those stay separate and a copy with no year is left alone rather than guessed into either.
+- when the group has two or more different country tags, such as `The Office (US)` and `The Office (UK)`, they are different shows: each keeps its tag and year, as in `The Office (US) (2005)`, and an untagged copy is left alone.
+
+The first listed provider decides the spelling of the name. Only shows are affected; movies already carry their year. The first run after enabling this renames existing show folders once. Combine with `DUPLICATE_VERSIONS=true` to keep each provider's stream of an episode as a version in the shared folder.
+
+Default is set to `MERGE_SHOW_YEARS=false`
 
 ### BYPASS_HEADER
 
