@@ -105,6 +105,7 @@ def variables_all(process_env_variable, str_to_bool, process_env_special, *args)
         'unsorted_dir': os.path.join(root_dir, "Unsorted_VOD"),
         'HOURS': os.getenv('HOURS', ""),
         'URLS': process_env_variable(os.getenv('M3U_URL', "")),
+        'M3U_LABELS': process_env_variable(os.getenv('M3U_LABELS', "")),
         'main_user': os.getenv('USER_NAME', ""),
         'main_pass': os.getenv('PASSWORD', ""),
         'SCRUB_HEADER': process_env_variable(os.getenv('SCRUB_HEADER', "")),

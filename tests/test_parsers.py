@@ -200,6 +200,23 @@ class ParseM3uFileTests(unittest.TestCase):
         self.assertFalse(by_name['Show S01E02'].get('exclude'))
         self.assertTrue(by_name['Get Gotti (2023)'].get('exclude'))
 
+    def test_directive_lines_between_extinf_and_url_are_skipped(self):
+        """#EXTVLCOPT style directives do not become the stream URL; a marker or #EXTINF ends the entry."""
+        path = os.path.join(self.tmpdir.name, 'directives.m3u')
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write('#EXTM3U\n')
+            f.write('#EXTINF:-1 tvg-name="With Opt (2020)" group-title="Movies",With Opt (2020)\n')
+            f.write('#EXTVLCOPT:http-user-agent=x\n')
+            f.write('http://x/1\n')
+            f.write('#EXTINF:-1 tvg-name="No Url (2021)" group-title="Movies",No Url (2021)\n')
+            f.write('#M3UPARSER-SOURCE:other\n')
+            f.write('#EXTINF:-1 tvg-name="Other (2022)" group-title="Movies",Other (2022)\n')
+            f.write('http://x/2\n')
+        entries, errors = parse_m3u_file(path, clean_group_title, process_value, {}, {}, [','], [], [], [], [])
+        self.assertEqual(errors, [])
+        self.assertEqual([(e['tvg-name'], e['stream_url'], e.get('source')) for e in entries],
+                         [('With Opt (2020)', 'http://x/1', None), ('Other (2022)', 'http://x/2', 'other')])
+
     def test_filters_apply_to_raw_group_title_before_scrub_header(self):
         """A term equal to the scrubbed-away group name still excludes the entry."""
         by_name = self.parse(EXCLUDE_TERM=['Documentary+'])

@@ -16,6 +16,8 @@ services:
       - PGID=1000
       # Provider playlist link. Keep the surrounding quotes and separate several URLs with commas.
       - M3U_URL="http://<provider-host>/get.php?username=<username>&password=<password>&type=m3u_plus&output=ts"
+      # Optional short name per URL, same order as M3U_URL. Defaults to the hostname, e.g. chicotv.
+      # - M3U_LABELS="chico, alpha"
       - HOURS=8
       - BYPASS_HEADER=true
       - CLEAN_SYNC=true

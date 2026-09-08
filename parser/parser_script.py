@@ -16,7 +16,8 @@ def main():
         vars(setup_logging, variables_all, 'log_file')
         # Download & concatenate all m3u urls
         try:
-            vars(prepare_m3us, variables_all, 'URLS', 'm3u_dir', 'm3u_file_path', 'skip_header')
+            sources = vars(prepare_m3us, variables_all, 'URLS', 'm3u_dir', 'm3u_file_path', 'skip_header',
+                           'M3U_LABELS')
         except ValueError as e:
             print(e)
             print("Skipping remaining functions and waiting to rerun...")

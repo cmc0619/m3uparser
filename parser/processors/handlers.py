@@ -1,5 +1,8 @@
 import os
+import re
 import shutil
+from urllib.parse import urlparse
+
 import requests
 from parser.utils import write_to_file
 
@@ -140,94 +143,154 @@ def move_files(file_path, destination_path):
     print(f"Moved {file_path} to {destination_path}")
 
 
-def prepare_m3us(URLS, m3u_dir, m3u_file_path, skip_header=None):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
-    }
+SOURCE_MARKER = '#M3UPARSER-SOURCE:'
+USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+              "Chrome/123.0.0.0 Safari/537.36")
+# Seconds to wait for a connection, then between bytes of the response
+REQUEST_TIMEOUT = (15, 120)
 
-    for vodurl in URLS:
-        try:
-            # If skip_header is True, skip the header checks and download directly
-            if skip_header:
-                print('Skipping url header check.')
-                response = requests.get(vodurl, headers=headers)
-                print(f"GET request to {vodurl} returned status code: {response.status_code}")
 
-                if response.status_code == 200:
-                    # Determine the filename from the URL
-                    filename = os.path.basename(vodurl)
-                    file_path = os.path.join(m3u_dir, filename)
+def source_label(url, index, labels=None):
+    """Return a short label for the m3u source at ``index`` in M3U_URL.
 
-                    # Save the file content
-                    with open(file_path, 'wb') as file:
-                        file.write(response.content)
-                    print(f"Downloaded file from URL: {vodurl}")
-                else:
-                    print(f"GET request failed for {vodurl} - Status code: {response.status_code}")
-                continue  # Skip the rest of the loop for this URL and go to the next one
+    An explicit entry in M3U_LABELS wins; otherwise the first component of the
+    URL's hostname is used (``http://chicotv.top/get.php?...`` becomes
+    ``chicotv``). Labels are reduced to letters, digits, ``.``, ``_`` and ``-``
+    so they are safe inside file names.
+    """
+    label = ''
+    if labels and index < len(labels):
+        label = labels[index]
+    if not label:
+        host = urlparse(url).hostname or ''
+        label = host.split('.')[0] if host else ''
+    label = re.sub(r'[^A-Za-z0-9._-]+', '', label)
+    return label or f'source{index + 1}'
 
+
+def unique_label(label, seen_labels):
+    """Return ``label`` or the first ``label2``, ``label3``... that is not in ``seen_labels``."""
+    candidate = label
+    suffix = 2
+    while candidate in seen_labels:
+        candidate = f'{label}{suffix}'
+        suffix += 1
+    return candidate
+
+
+def redact_url(url):
+    """Return a URL safe for logs: scheme, host and path only, without the query string.
+
+    Provider playlist URLs carry the account username and password as query
+    parameters, and the log file is kept on disk and uploaded to Jellyfin.
+    """
+    parts = urlparse(url)
+    if not parts.scheme or not parts.hostname:
+        return '<invalid url>'
+    host = parts.hostname
+    if parts.port:
+        host = f'{host}:{parts.port}'
+    return f'{parts.scheme}://{host}{parts.path}'
+
+
+def download_m3u(vodurl, file_path, skip_header=None):
+    """Download one m3u URL to ``file_path``. Returns True when a file was written.
+
+    Requests use a bounded connect and read timeout so a provider that stops
+    responding cannot stall the whole run, and log lines never include the
+    query string or response headers.
+    """
+    headers = {"User-Agent": USER_AGENT}
+    shown = redact_url(vodurl)
+    try:
+        if not skip_header:
             # Default behavior: check headers before downloading
-            response = requests.head(vodurl, headers=headers)
-            print(f"HEAD response headers for {vodurl}: {response.headers}")
-            print(f"HEAD request to {vodurl} returned status code: {response.status_code}")
+            response = requests.head(vodurl, headers=headers, timeout=REQUEST_TIMEOUT)
+            print(f"HEAD request to {shown} returned status code: {response.status_code}")
+            if response.status_code != 200:
+                print(f"URL is not accessible: {shown} - Status code: {response.status_code}")
+                return False
+            content_type = response.headers.get('Content-Type')
+            content_disposition = response.headers.get('content-disposition')
+            if not (content_type and 'filename=' in (content_disposition or '')):
+                print(f"URL not valid: {shown} - Content-Type or filename missing. Skipping...")
+                return False
+        else:
+            print('Skipping url header check.')
 
-            if response.status_code == 200:
-                content_type = response.headers.get('Content-Type')
-                content_disposition = response.headers.get('content-disposition')
+        response = requests.get(vodurl, headers=headers, timeout=REQUEST_TIMEOUT)
+        print(f"GET request to {shown} returned status code: {response.status_code}")
+        if response.status_code != 200:
+            print(f"GET request failed for {shown} - Status code: {response.status_code}")
+            return False
+        with open(file_path, 'wb') as file:
+            file.write(response.content)
+        print(f"Downloaded file from URL: {shown}")
+        return True
+    except requests.RequestException as e:
+        print(f"Error processing URL {shown}: {type(e).__name__}: {str(e).replace(vodurl, shown)}")
+        return False
 
-                if content_type and 'filename=' in (content_disposition or ''):
-                    response = requests.get(vodurl, headers=headers)
-                    print(f"GET request to {vodurl} returned status code: {response.status_code}")
 
-                    if response.status_code == 200:
-                        # Determine the filename from the URL
-                        filename = os.path.basename(vodurl)
-                        file_path = os.path.join(m3u_dir, filename)
+def prepare_m3us(URLS, m3u_dir, m3u_file_path, skip_header=None, M3U_LABELS=None):
+    """Download every M3U_URL and combine them into one playlist, in M3U_URL order.
 
-                        # Save the file content
-                        with open(file_path, 'wb') as file:
-                            file.write(response.content)
-                        print(f"Downloaded file from URL: {vodurl}")
-                    else:
-                        print(f"GET request failed for {vodurl} - Status code: {response.status_code}")
-                else:
-                    print(f"URL not valid: {vodurl} - Content-Type or filename missing. Skipping...")
-            else:
-                print(f"URL is not accessible: {vodurl} - Status code: {response.status_code}")
-        except requests.RequestException as e:
-            print(f"Error processing URL {vodurl}: {e}")
+    Each source's content is preceded by a ``#M3UPARSER-SOURCE:<label>`` line so
+    the parser can tag entries with the provider they came from. Because the
+    combined file follows M3U_URL order, the first listed provider wins when
+    several supply the same title.
+
+    Returns a list of ``{'label', 'url', 'file', 'downloaded'}`` dicts, one
+    per configured URL, including sources that failed to download
+    (``downloaded`` False). A download cut off mid-line loses that last,
+    incomplete line so it cannot swallow the next source's marker.
+    """
+    sources = []
+    seen_labels = set()
+    for index, vodurl in enumerate(URLS):
+        label = unique_label(source_label(vodurl, index, M3U_LABELS), seen_labels)
+        seen_labels.add(label)
+        file_path = os.path.join(m3u_dir, f'{index:02d}_{label}.m3u')
+        downloaded = download_m3u(vodurl, file_path, skip_header)
+        sources.append({'label': label, 'url': vodurl, 'file': file_path, 'downloaded': downloaded})
 
     print("All URLs processed.")
 
     # Create the output file and add #EXTM3U at the beginning
-    with open(m3u_file_path, 'w') as outfile:
+    with open(m3u_file_path, 'w', encoding='utf-8') as outfile:
         outfile.write("#EXTM3U\n")
-        # Loop through each file in the specified directory
-        for file in os.listdir(m3u_dir):
-            file_path = os.path.join(m3u_dir, file)
+        for source in sources:
+            file_path = source['file']
+            if not (source['downloaded'] and os.path.isfile(file_path)):
+                print(f"No playlist downloaded for source {source['label']}")
+                continue
             print(f"Processing file: {file_path}")
-            # Check if the file exists and is readable
-            if os.path.isfile(file_path):
-                with open(file_path, 'r') as infile:
-                    # Skip the first line and append the rest to the output file
-                    lines = infile.readlines()[1:]
-                    if len(lines) < 2:
-                        continue
-                    outfile.write("\n")
-                    outfile.writelines(lines)
-            else:
-                print(f"Cannot read {file_path}")
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as infile:
+                # Skip the first line and append the rest to the output file
+                lines = infile.readlines()[1:]
+            if lines and not lines[-1].endswith('\n'):
+                print(f"Playlist for source {source['label']} ends mid-line; dropping the incomplete last line")
+                lines.pop()
+            # A provider cannot claim another provider's entries by emitting our own marker
+            lines = [line for line in lines if not line.lstrip().startswith(SOURCE_MARKER)]
+            if len(lines) < 2:
+                print(f"Playlist for source {source['label']} is empty. Skipping...")
+                continue
+            outfile.write(f"\n{SOURCE_MARKER}{source['label']}\n")
+            outfile.writelines(lines)
 
     print(f"All files have been combined into {m3u_file_path}")
 
     # Check if the combined m3u file has 3 or fewer lines
     print("Checking the combined m3u file for line count...")
-    with open(m3u_file_path, 'r') as m3u_file:
+    with open(m3u_file_path, 'r', encoding='utf-8') as m3u_file:
         print("Reading the combined m3u file for line count...")
         lines = m3u_file.readlines()
         print(f"Lines in the combined m3u file: {len(lines)}")
         if len(lines) <= 1:
             raise ValueError(f"The m3u file {m3u_file_path} has 3 or fewer lines. Aborting.")
+
+    return sources
 
 # def prepare_m3us(URLS, m3u_dir, m3u_file_path):
 #     for vodurl in URLS:

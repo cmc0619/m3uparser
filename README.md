@@ -15,6 +15,7 @@ services:
       - PUID=1000 # Defaults 1000 if blank.
       - PGID=1000 # Defaults 1000 if blank.
       - M3U_URL= # "https://m3u_URL1.com, https://m3u_URL2.com, etc..."
+      - M3U_LABELS= # Optional, a short name per M3U_URL in the same order, e.g. "chico, alpha"
       - HOURS=12 # update interval, setting this optional, default 12hrs.
       - SCRUB_HEADER= # Optional, add more/different scrub values, does not override the defaults
       - EXCLUDE_TERMS= # Optional, this acts as a filter to ignore streams that contain defined value in group-title, tvg-name or #EXTGRP
@@ -43,6 +44,7 @@ services:
 | ENV VARIABLE  | VALUES                                              | DESCRIPTION                                                                                                   | EXAMPLE                                      | DEFAULT VALUES                      |
 | ------------- |:---------------------------------------------------:|:-------------------------------------------------------------------------------------------------------------:|:--------------------------------------------:|:-----------------------------------:|
 | M3U_URL       | any url(s), in quotes, and seperated with a comma , | Include all URLs you want to be parsed                                                                        | "https://m3u_URL1.com, https://m3u_URL2.com" | n/a                                 |
+| M3U_LABELS    | names, in quotes, seperated with a comma ,          | Optional short name per M3U_URL, in the same order. Defaults to the first part of each URL's hostname        | "chico, alpha"                              | hostname                            |
 | BYPASS_HEADER | true/false                                          | Bypass checking url header for content-type and content-disposition.                                          | False                                        | False                               |
 | HOURS         | numeric value                                       | Number representing the interval you want to update from m3u urls                                             | 12                                           | 8                                   |
 | SCRUB_HEADER  | any text, in quotes, and seperated with a comma ,   | Removes value and preceding text from begining of group-title line                                            | "HD :"                                       | "HD :, SD :"                        |
@@ -96,6 +98,12 @@ The parser uses the `group-title` value in the `#EXTINF` line of m3u files to st
 Key=Value pairs are made from each item in the EXTINF line. The values are then used to determine stream type, extract relavent information, and finally clean out unwanted values to then make the end resulting .strm libraries.
 
 ## Examples and Explanations
+
+### MULTIPLE PROVIDERS;   M3U_URL, M3U_LABELS
+
+Every URL in `M3U_URL` is downloaded and combined into one playlist, in the order you list them. When two providers deliver the same title, the first listed provider wins and the later copy is treated as a duplicate, so put your preferred provider first. Each stream remembers which provider it came from; the provider name is the first part of the URL's hostname (`http://chicotv.top/...` becomes `chicotv`) unless you set `M3U_LABELS` with one name per URL in the same order.
+
+A provider that fails to download, or returns an empty playlist, is skipped for that run and reported in the log. If nothing at all could be downloaded the run is aborted and the library is left untouched.
 
 ### SCRUB_HEADER
 The `group-title` value often contains more information than just the TV show or Movie name. The `SCRUB_HEADER` values work by matching the first instance of the given values in the `group-title` string, and removing the values and anything that precedes it. The goal is to use a common string found amongst the `group-title` values.
