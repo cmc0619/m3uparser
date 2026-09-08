@@ -1,6 +1,8 @@
 import re
 from functools import lru_cache
 
+from .handlers import SOURCE_MARKER
+
 
 @lru_cache(maxsize=None)
 def term_pattern(term):
@@ -60,7 +62,8 @@ def parse_m3u_file(m3u_file_path, clean_group_title, process_value, REPLACE_TERM
     """Parse the combined m3u file into a list of entry dictionaries.
 
     Each ``#EXTINF`` line (plus an optional ``#EXTGRP`` line and its stream
-    URL) becomes one dictionary. Entries matching the INCLUDE_TERMS /
+    URL) becomes one dictionary carrying a ``source`` label when the file was
+    combined by ``prepare_m3us``. Entries matching the INCLUDE_TERMS /
     EXCLUDE_TERMS filters are kept in the list but flagged with
     ``exclude=True`` so that no .strm file is written for them. Live TV
     entries are only flagged when ``filter_live_tv`` is True.
@@ -81,24 +84,43 @@ def parse_m3u_file(m3u_file_path, clean_group_title, process_value, REPLACE_TERM
     INCLUDE_TERM = INCLUDE_TERM or []
     EXCLUDE_TERM = EXCLUDE_TERM or []
 
+    current_source = ''
+
     while i < total_lines:
         line = lines[i].strip()
+
+        # Source markers are written by prepare_m3us in front of each provider's playlist
+        if line.startswith(SOURCE_MARKER):
+            current_source = line[len(SOURCE_MARKER):].strip()
 
         # Check if the line starts with #EXTINF
         if line.startswith("#EXTINF"):
             try:
                 # Extract key=value pairs from the #EXTINF line and remove header value(s)
                 key_value_pairs = extract_key_value_pairs(line)
+                if current_source:
+                    key_value_pairs['source'] = current_source
 
-                # Check if the next line is #EXTGRP or a URL
-                if i + 1 < total_lines and lines[i + 1].startswith("#EXTGRP"):
-                    key_value_pairs['extgrp'] = lines[i + 1].strip()
+                # Consume #EXTGRP and any other directive lines that sit between #EXTINF and the URL.
+                # A new #EXTINF or a source marker ends the entry instead.
+                while i + 1 < total_lines:
+                    next_line = lines[i + 1].strip()
+                    if next_line.startswith("#EXTGRP"):
+                        key_value_pairs['extgrp'] = next_line
+                    elif not next_line.startswith("#") or next_line.startswith("#EXTINF") \
+                            or next_line.startswith(SOURCE_MARKER):
+                        break
                     i += 1  # Move to the next line
 
-                # Check if the next line is a URL
-                if i + 1 < total_lines and not lines[i + 1].startswith("#EXTINF"):
+                # The next line is the URL unless it is a directive (for example the next source marker)
+                if i + 1 < total_lines and lines[i + 1].strip() and not lines[i + 1].startswith("#"):
                     key_value_pairs['stream_url'] = lines[i + 1].strip()
                     i += 1  # Move to the next line
+
+                if 'stream_url' not in key_value_pairs:
+                    print(f"Skipping entry without a stream URL: {line}")
+                    i += 1
+                    continue
 
                 # Apply INCLUDE_TERMS / EXCLUDE_TERMS against the raw values, before SCRUB_HEADER
                 filtered = filter_entry(key_value_pairs, INCLUDE_TERM, EXCLUDE_TERM)

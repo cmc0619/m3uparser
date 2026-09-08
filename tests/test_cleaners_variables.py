@@ -3,7 +3,7 @@ import os
 import unittest
 from unittest import mock
 
-from parser.config.variables import process_env_special, process_env_variable, str_to_bool, variables_all
+from parser.config.variables import vars as resolve_vars, process_env_special, process_env_variable, str_to_bool, variables_all
 from parser.processors.cleaners import process_value
 
 
@@ -85,6 +85,34 @@ class RemoveDuplicatesVariableTests(unittest.TestCase):
             values = self.read()
         self.assertIs(values['filter_live_tv'], True)
         self.assertEqual(values['INCLUDE_TERM'], ['EN', '[EN]'])
+
+
+class VarsHelperTests(unittest.TestCase):
+    """vars() resolves variable names given positionally and as keyword values alike."""
+
+    def test_keyword_string_values_are_resolved_alongside_positional_names(self):
+        """A keyword whose value names a variable receives that variable even when positional names are present."""
+        seen = {}
+
+        def target(movies_dir, remove_sync, root=None):
+            seen.update(movies_dir=movies_dir, remove_sync=remove_sync, root=root)
+
+        with mock.patch.dict('os.environ', {'CLEAN_SYNC': 'true'}):
+            resolve_vars(target, variables_all, 'movies_dir', 'remove_sync', root='local_vods_dir')
+        expected = variables_all(process_env_variable, str_to_bool, process_env_special, 'movies_dir', 'local_vods_dir')
+        self.assertEqual(seen['movies_dir'], expected['movies_dir'])
+        self.assertEqual(seen['root'], expected['local_vods_dir'])
+        self.assertTrue(seen['remove_sync'])
+
+    def test_unknown_strings_pass_through_unchanged(self):
+        """A string that is not a variable name is handed to the function as written."""
+        seen = {}
+
+        def target(label, root=None):
+            seen.update(label=label, root=root)
+
+        resolve_vars(target, variables_all, 'not-a-variable', root='/some/path')
+        self.assertEqual(seen, {'label': 'not-a-variable', 'root': '/some/path'})
 
 
 if __name__ == '__main__':

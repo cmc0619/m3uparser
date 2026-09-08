@@ -16,7 +16,8 @@ def main():
         vars(setup_logging, variables_all, 'log_file')
         # Download & concatenate all m3u urls
         try:
-            vars(prepare_m3us, variables_all, 'URLS', 'm3u_dir', 'm3u_file_path', 'skip_header')
+            sources = vars(prepare_m3us, variables_all, 'URLS', 'm3u_dir', 'm3u_file_path', 'skip_header',
+                           'M3U_LABELS')
         except ValueError as e:
             print(e)
             print("Skipping remaining functions and waiting to rerun...")
@@ -29,17 +30,31 @@ def main():
         entries, errors = vars(parse_m3u_file, variables_all, 'm3u_file_path', clean_group_title, process_value,
                                'REPLACE_TERMS', 'REPLACE_DEFAULTS', 'SCRUB_HEADER', 'SCRUB_DEFAULTS', 'REMOVE_TERMS',
                                'REMOVE_DEFAULTS', 'EXCLUDE_TERM', 'INCLUDE_TERM', 'filter_live_tv')
+        # Load what previous runs wrote and decide which providers can be trusted this run
+        state = vars(load_state, variables_all, 'state_file')
+        source_status = vars(judge_sources, variables_all, state, sources, entries, 'min_source_ratio')
+        report_sources(source_status)
+        # Give every provider's episodes of a show one folder name, with a year when any provider supplies one
+        vars(merge_show_years, variables_all, entries, 'merge_show_years', state.setdefault('shows', {}))
         # Process each entry dictionary and track created .strm files
-        vars(proc_entries, variables_all, entries, errors, 'tv_dir', 'movies_dir', 'unsorted_dir',
-             'remove_duplicates')
+        written = vars(proc_entries, variables_all, entries, errors, 'tv_dir', 'movies_dir', 'unsorted_dir',
+                       'remove_duplicates', 'duplicate_versions')
         # Extract live TV entries and process them separately
         live_tv_entries = [entry for entry in entries if entry.get('livetv') and not entry.get('exclude')]
         vars(process_live_tv_entries, variables_all, live_tv_entries, 'livetv_file')
-        # Sync items from VOD m3us to local directories & Move livetv.m3u
-        vars(sync_directories, variables_all, 'movies_dir', 'local_mov_dir', 'remove_sync')
-        vars(sync_directories, variables_all, 'tv_dir', 'local_tv_dir', 'remove_sync')
+        # Sync items from VOD m3us to local directories & Move livetv.m3u, keeping titles of unavailable providers
+        should_remove = vars(retention_policy, variables_all, state, source_status, 'remove_after_days')
+        vars(sync_directories, variables_all, 'movies_dir', 'local_mov_dir', 'remove_sync', should_remove=should_remove,
+             root='local_vods_dir')
+        vars(sync_directories, variables_all, 'tv_dir', 'local_tv_dir', 'remove_sync', should_remove=should_remove,
+             root='local_vods_dir')
         vars(torf, variables_all, move_files=move_files, live_tv='live_tv', sync_directories=sync_directories,
-             UNSORTED='UNSORTED')
+             UNSORTED='UNSORTED', should_remove=should_remove, local_vods_dir='local_vods_dir')
+        report_retention(should_remove)
+        # Remember what this run wrote and which providers were trusted
+        record_run(state, vars(relative_written, variables_all, written, 'root_dir'), source_status)
+        vars(prune_state, variables_all, state, 'local_vods_dir')
+        vars(save_state, variables_all, 'state_file', state)
         # Count .strm files and live TV channels
         [livetv_channels_count, movie_strm_count, tv_strm_count, unsorted_strm_count] = vars(count_emup, variables_all,
                                                                                              live_tv_entries,

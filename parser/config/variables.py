@@ -39,6 +39,26 @@ def process_env_variable(env_var_value):
 #     return env_var_value
 
 
+_env_warned = set()
+
+
+def env_number(name, default, cast=float):
+    """Read a numeric environment variable, falling back to ``default`` on a blank or invalid value.
+
+    An invalid value is reported once per process instead of aborting the run.
+    """
+    raw = os.getenv(name, '')
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return cast(raw.strip())
+    except ValueError:
+        if name not in _env_warned:
+            _env_warned.add(name)
+            print(f"Ignoring {name}={raw!r}: not a number, using the default {default}")
+        return default
+
+
 def str_to_bool(value):
     if isinstance(value, str):
         return value.lower() in ("yes", "true", "t", "1")
@@ -96,6 +116,8 @@ def variables_all(process_env_variable, str_to_bool, process_env_special, *args)
         'master_tv_dir': f'{root_dir}/TV_VOD',
         'master_unsorted': f'{root_dir}/Unsorted_VOD',
         'local_unsorted': f'{root_dir}/VODS/Unsorted_VOD',
+        'local_vods_dir': f'{root_dir}/VODS',
+        'state_file': os.path.join(root_dir, 'logs/library_state.json'),
         'm3u_dir': os.path.join(root_dir, "m3u"),
         'm3u_file_path': os.path.join(root_dir, "m3u_file.m3u"),
         'livetv_file': os.path.join(root_dir, "livetv.m3u"),
@@ -105,6 +127,7 @@ def variables_all(process_env_variable, str_to_bool, process_env_special, *args)
         'unsorted_dir': os.path.join(root_dir, "Unsorted_VOD"),
         'HOURS': os.getenv('HOURS', ""),
         'URLS': process_env_variable(os.getenv('M3U_URL', "")),
+        'M3U_LABELS': process_env_variable(os.getenv('M3U_LABELS', "")),
         'main_user': os.getenv('USER_NAME', ""),
         'main_pass': os.getenv('PASSWORD', ""),
         'SCRUB_HEADER': process_env_variable(os.getenv('SCRUB_HEADER', "")),
@@ -113,6 +136,10 @@ def variables_all(process_env_variable, str_to_bool, process_env_special, *args)
         'INCLUDE_TERM': process_env_variable(os.getenv('INCLUDE_TERMS', "")),
         'filter_live_tv': str_to_bool(os.getenv('FILTER_LIVE_TV', "")),
         'remove_duplicates': str_to_bool(os.getenv('REMOVE_DUPLICATES') or "True"),
+        'duplicate_versions': str_to_bool(os.getenv('DUPLICATE_VERSIONS', "")),
+        'merge_show_years': str_to_bool(os.getenv('MERGE_SHOW_YEARS', "")),
+        'min_source_ratio': env_number('MIN_SOURCE_RATIO', 0.5),
+        'remove_after_days': env_number('REMOVE_AFTER_DAYS', 0, int),
         'REMOVE_TERMS': process_env_variable(os.getenv('REMOVE_TERMS', "")),
         'REMOVE_DEFAULTS': process_env_variable(os.getenv('REMOVE_DEFAULTS', "")),
         'REPLACE_TERMS': process_env_special(os.getenv('REPLACE_TERMS', "")),
@@ -164,8 +191,9 @@ def variables_all(process_env_variable, str_to_bool, process_env_special, *args)
 
 
 def vars(func, vars_func, *args, **extra_kwargs):
-    # Extract string arguments that may need processing
+    # Extract string arguments that may need processing, including keyword values such as root='local_vods_dir'
     string_args = [arg for arg in args if isinstance(arg, str)]
+    string_args += [value for value in extra_kwargs.values() if isinstance(value, str)]
 
     # Fetch values from vars_func based on string_args
     all_vars = vars_func(process_env_variable, str_to_bool, process_env_special, *string_args)
@@ -216,12 +244,14 @@ def update_env_file(key, value):
 def torf(move_files=None, live_tv=None, sync_directories=None, UNSORTED=None, SERVER_CFG=None, wait_for_server=None,
          ezpztv_task=None, ezpztv_setup=None, application_version=None, APIKEY=None, apikey_run=None,
          jellyfin_url=None, thread_user=None, thread_pass=None, thread_url=None, tf_update=None,
-         run_websocket_operations=None, run_reload_operations=None, apk_server=None, start_server=None, APK_DLOAD=None):
+         run_websocket_operations=None, run_reload_operations=None, apk_server=None, start_server=None, APK_DLOAD=None,
+         should_remove=None, local_vods_dir=None):
     try:
 
         if UNSORTED is True:
             print("Moving unsorted VOD")
-            vars(sync_directories, variables_all, 'master_unsorted', 'local_unsorted', 'remove_sync')
+            vars(sync_directories, variables_all, 'master_unsorted', 'local_unsorted', 'remove_sync',
+                 should_remove=should_remove, root=local_vods_dir)
         if live_tv is True:
             print("Moving livetv.m3u")
             vars(move_files, variables_all, 'livetv_file', 'live_tv_dir')
