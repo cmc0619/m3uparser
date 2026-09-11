@@ -430,13 +430,16 @@ def prune_tree(path, root, should_remove):
 
 
 # sync_directories with remove from src if not in dest
-def sync_directories(src, dest, remove_sync, should_remove=None, root=None):
+def sync_directories(src, dest, remove_sync, should_remove=None, root=None, added_paths=None):
     """Copy new and changed files from ``src`` into ``dest``.
 
     With ``remove_sync`` True, files and folders in ``dest`` that are not in
     ``src`` are removed. When ``should_remove`` is given it is consulted for
     every such file (with its path relative to ``root``), so files whose
     provider was unavailable this run can be kept.
+
+    When ``added_paths`` is a list, newly created destination file paths are
+    appended (content updates of existing files are not).
     """
     if remove_sync:
         for item in os.listdir(src):
@@ -447,11 +450,14 @@ def sync_directories(src, dest, remove_sync, should_remove=None, root=None):
                 if not os.path.exists(dest_item):
                     os.makedirs(dest_item)
                     # print(f"Created directory: {dest_item}")
-                sync_directories(src_item, dest_item, remove_sync, should_remove, root)
+                sync_directories(src_item, dest_item, remove_sync, should_remove, root,
+                                 added_paths=added_paths)
             elif os.path.isfile(src_item):
                 if not os.path.exists(dest_item):
                     shutil.copy2(src_item, dest_item)
                     print(f"Added content: {dest_item}")
+                    if added_paths is not None:
+                        added_paths.append(dest_item)
                 else:
                     # Check if contents differ
                     with open(src_item, 'rb') as f_src, open(dest_item, 'rb') as f_dest:
@@ -481,11 +487,13 @@ def sync_directories(src, dest, remove_sync, should_remove=None, root=None):
             if os.path.isdir(src_item):
                 if not os.path.exists(dest_item):
                     os.makedirs(dest_item)
-                sync_directories(src_item, dest_item, remove_sync)
+                sync_directories(src_item, dest_item, remove_sync, added_paths=added_paths)
             elif os.path.isfile(src_item):
                 if not os.path.exists(dest_item):
                     shutil.copy2(src_item, dest_item)
                     print(f"Content added: {dest_item}")
+                    if added_paths is not None:
+                        added_paths.append(dest_item)
                 else:
                     # Check if contents differ
                     with open(src_item, 'rb') as f_src, open(dest_item, 'rb') as f_dest:

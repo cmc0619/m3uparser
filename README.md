@@ -58,7 +58,8 @@ services:
 | REMOVE_TERMS  | any text, in quotes, and seperated with a comma ,   | Removes value(s) set from file and directory names                                                            | "x264, 720p"                                 | "720p, WEB, h264, H264, HDTV, x264" |
 | REPLACE_TERMS | "term-to-replace=replace-value"                     | Replaces one value with another. Separate terms with an = and term on left is replaced with term to the right | "replace-this=with-this"                     | "1/2=\u00BD, /=-"                   |
 | CLEANERS      | series,movie,tv,unsorted                            | Type of stream to apply REMOVE_TERMS value to                                                                 | tv, movies                                   | tv                                  |
-| REFRESH_LIB   | true/false                                          | Refresh Jellyfin libraries after parsing                                                                      | false                                        | false                               |
+| REFRESH_LIB   | false / true / targeted                             | Jellyfin refresh after parsing: off, full `/Library/Refresh`, or only newly added VOD paths                   | targeted                                     | false                               |
+| JELLYFIN_VODS_PATH | Jellyfin container path                          | Jellyfin-internal mount that maps to m3uparser's `VODS` tree (required for `REFRESH_LIB=targeted`)            | /data/vod                                    | ""                                  |
 | CLEAN_SYNC    | true/false                                          | Will remove titles from VOD folders that are not present in m3u.                                              | false                                        | false                               |
 | MIN_SOURCE_RATIO | 0 to 1                                           | With CLEAN_SYNC, a provider whose playlist shrank below this share of its previous run is treated as unavailable and its titles are kept | 0.5                      | 0.5                                 |
 | REMOVE_AFTER_DAYS | number of days                                  | With CLEAN_SYNC, keep a title that disappeared from a working provider for this many days before removing it. 0 removes immediately | 3                 | 0                                   |
@@ -225,14 +226,21 @@ Set `UNSORTED=true` to create a VOD folder for poorly named or unidentified stre
 
 Default is set to `UNSORTED=false`
 
-### JELLYFIN INTEGRATION;   JELLYFIN_URL, API_KEY, REFRESH_LIB
+### JELLYFIN INTEGRATION;   JELLYFIN_URL, API_KEY, REFRESH_LIB, JELLYFIN_VODS_PATH
 
-To utilize the Jellyfin integration, you must have a Jellyfin server accessible if you supplied the compose file with the `API_KEY` and `JELLYFIN_URL` env variable. If you supply a address to your working server, and an api key you generated on that server; then when this script is ran it will refresh your library if `REFRESH_LIB=true` to add new titles that are in m3u urls, if `CLEAN_SYNC=true` it will also then remove any titles not found in the m3u urls but are in your VOD libraries. If you have `LIVE_TV=true`, then it will also refresh your tv guide.
+To utilize the Jellyfin integration, you must have a Jellyfin server accessible if you supplied the compose file with the `API_KEY` and `JELLYFIN_URL` env variable. When this script runs:
+
+- `REFRESH_LIB=true` — full Jellyfin `POST /Library/Refresh` (every library).
+- `REFRESH_LIB=targeted` — notify Jellyfin only about **newly added** `.strm` files under `VODS/` via `POST /Library/Media/Updated`. Requires `JELLYFIN_VODS_PATH` (Jellyfin's internal mount for that same host tree, e.g. `/data/vod`). If the path is unset or nothing new was added, targeted mode skips refresh and does **not** fall back to a full scan.
+- `REFRESH_LIB=false` — no library refresh.
+
+If `CLEAN_SYNC=true` it will also then remove any titles not found in the m3u urls but are in your VOD libraries. If you have `LIVE_TV=true`, then it will also refresh your tv guide.
 
 **`JELLYFIN_URL`** should include http:// or https:// (DO NOT SURROUND WITH "")
 Logs will now be uploaded to the server as well.
 **`API_KEY`** Generate on server. Dashboard > Api Key > Add
-**`REFRESH_LIB`** True or false, depending on your preference.
+**`REFRESH_LIB`** `false`, `true`, or `targeted`.
+**`JELLYFIN_VODS_PATH`** Jellyfin-container path that mounts the same host folder as m3uparser's `VODS` (required for targeted refresh).
 
 If you do not have a Jellyfin server set up, but would like a easy way to get one set up, checkout the branch of this repo for an automated setup https://github.com/Xaque8787/m3uparser/tree/ezpztv
 

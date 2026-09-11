@@ -3,7 +3,7 @@ from parser.jellyfin_api.utility import (ping_server, run_libraryapi_task, run_g
 from parser.config.variables import *
 
 
-def apikey_run():
+def apikey_run(added_paths=None):
     try:
         value = vars(ping_server, variables_all, 'jellyfin_url', max_retries=8, interval=7)
         if value == "continue":
@@ -11,7 +11,8 @@ def apikey_run():
             print("Running guide task")
             vars(run_guide_task, variables_all, 'APIKEY', 'jellyfin_url', 'live_tv')
             print("Running library task")
-            vars(run_libraryapi_task, variables_all, 'APIKEY', 'jellyfin_url', 'lib_refresh')
+            vars(run_libraryapi_task, variables_all, 'APIKEY', 'jellyfin_url', 'lib_refresh',
+                 'jellyfin_vods_path', 'local_vods_dir', added_paths=added_paths or [])
             print("Upload logs")
             vars(api_upload_log, variables_all, 'log_file', 'APIKEY', 'jellyfin_url', 'HOURS')
     except Exception as e:

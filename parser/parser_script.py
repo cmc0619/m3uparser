@@ -44,13 +44,14 @@ def main():
         vars(process_live_tv_entries, variables_all, live_tv_entries, 'livetv_file')
         # Sync items from VOD m3us to local directories & Move livetv.m3u, keeping titles of unavailable providers
         should_remove = vars(retention_policy, variables_all, state, source_status, 'remove_after_days')
+        added_paths = []
         vars(sync_directories, variables_all, 'movies_dir', 'local_mov_dir', 'remove_sync', should_remove=should_remove,
-             root='local_vods_dir')
+             root='local_vods_dir', added_paths=added_paths)
         vars(sync_directories, variables_all, 'tv_dir', 'local_tv_dir', 'remove_sync', should_remove=should_remove,
-             root='local_vods_dir')
+             root='local_vods_dir', added_paths=added_paths)
         vars(torf, variables_all, move_files=move_files, live_tv='live_tv', sync_directories=sync_directories,
-             UNSORTED='UNSORTED', should_remove=should_remove, local_vods_dir='local_vods_dir')
-        report_retention(should_remove)
+             UNSORTED='UNSORTED', should_remove=should_remove, local_vods_dir='local_vods_dir',
+             added_paths=added_paths)        report_retention(should_remove)
         # Remember what this run wrote and which providers were trusted
         record_run(state, vars(relative_written, variables_all, written, 'root_dir'), source_status)
         vars(prune_state, variables_all, state, 'local_vods_dir')
@@ -75,8 +76,7 @@ def main():
              jellyfin_url='jellyfin_url', thread_user='thread_user', thread_pass='thread_pass', thread_url='thread_url',
              apikey_run=apikey_run, run_websocket_operations=run_websocket_operations,
              run_reload_operations=run_reload_operations, apk_server='apk_server',
-             start_server=start_server, APK_DLOAD='APK_DLOAD')
-        # Wait interval time to re-run script
+             start_server=start_server, APK_DLOAD='APK_DLOAD', added_paths=added_paths)        # Wait interval time to re-run script
         vars(run_timer, variables_all, main, 'HOURS')
 
     except Exception as e:

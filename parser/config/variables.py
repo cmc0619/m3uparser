@@ -65,6 +65,23 @@ def str_to_bool(value):
     return bool(value)
 
 
+def parse_refresh_lib(value):
+    """Normalize REFRESH_LIB to 'false', 'true', or 'targeted'."""
+    if value is None:
+        return 'false'
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    text = str(value).strip().lower()
+    if text in ('', 'false', 'no', 'n', '0'):
+        return 'false'
+    if text in ('true', 'yes', 't', '1'):
+        return 'true'
+    if text == 'targeted':
+        return 'targeted'
+    print(f"Ignoring REFRESH_LIB={value!r}: use false, true, or targeted")
+    return 'false'
+
+
 def process_env_special(env_var_value):
     key_value_pairs = {}
 
@@ -158,7 +175,8 @@ def variables_all(process_env_variable, str_to_bool, process_env_special, *args)
         'host': os.getenv('TF_HOST', ""),
         'port': os.getenv('TF_PORT', ""),
         'application_version': os.getenv('APP_VERSION', ""),
-        'lib_refresh': str_to_bool(os.getenv('REFRESH_LIB', "")),
+        'lib_refresh': parse_refresh_lib(os.getenv('REFRESH_LIB', "")),
+        'jellyfin_vods_path': (os.getenv('JELLYFIN_VODS_PATH') or '').strip(),
         'remove_sync': str_to_bool(os.getenv('CLEAN_SYNC', "")),
         'url_m3u': os.getenv('M3U_URL', ""),
         'epg_xml': os.getenv('EPG_URL', ""),
@@ -245,13 +263,13 @@ def torf(move_files=None, live_tv=None, sync_directories=None, UNSORTED=None, SE
          ezpztv_task=None, ezpztv_setup=None, application_version=None, APIKEY=None, apikey_run=None,
          jellyfin_url=None, thread_user=None, thread_pass=None, thread_url=None, tf_update=None,
          run_websocket_operations=None, run_reload_operations=None, apk_server=None, start_server=None, APK_DLOAD=None,
-         should_remove=None, local_vods_dir=None):
+         should_remove=None, local_vods_dir=None, added_paths=None):
     try:
 
         if UNSORTED is True:
             print("Moving unsorted VOD")
             vars(sync_directories, variables_all, 'master_unsorted', 'local_unsorted', 'remove_sync',
-                 should_remove=should_remove, root=local_vods_dir)
+                 should_remove=should_remove, root=local_vods_dir, added_paths=added_paths)
         if live_tv is True:
             print("Moving livetv.m3u")
             vars(move_files, variables_all, 'livetv_file', 'live_tv_dir')
@@ -262,7 +280,7 @@ def torf(move_files=None, live_tv=None, sync_directories=None, UNSORTED=None, SE
                 run_reload_operations()
             print("Running ezpztv start-up task")
             wait_for_server(15)
-            ezpztv_task()
+            ezpztv_task(added_paths=added_paths)
         if application_version in ["ezpztv", "threadfin"] and SERVER_CFG is False:
             wait_for_server(21)
             if application_version == "threadfin":
@@ -276,7 +294,7 @@ def torf(move_files=None, live_tv=None, sync_directories=None, UNSORTED=None, SE
                 print("Running Threadfin m3u/epg update")
                 run_reload_operations()
             print("Running ezpztv api start-up task")
-            apikey_run()
+            apikey_run(added_paths=added_paths)
         if application_version == "m3uparser" and thread_user and thread_pass:
             print("Running Threadfin m3u update")
             tf_update(thread_user, thread_pass, thread_url)
