@@ -72,14 +72,14 @@ def run_libraryapi_task(api_key, jellyfin_url, lib_refresh, jellyfin_vods_path='
             return
 
     # Use api-key method to get default headers
-    apikey_ezpztv = JellyfinClient()
-    apikey_ezpztv.config.app('EZPZTV', '21.12', 'device', '123456')
-    apikey_ezpztv.config.data["auth.ssl"] = True
-    apikey_ezpztv.authenticate(
-        {"Servers": [
-            {"AccessToken": api_key, "address": jellyfin_url}]}, discover=False)
-
     try:
+        apikey_ezpztv = JellyfinClient()
+        apikey_ezpztv.config.app('EZPZTV', '21.12', 'device', '123456')
+        apikey_ezpztv.config.data["auth.ssl"] = True
+        apikey_ezpztv.authenticate(
+            {"Servers": [
+                {"AccessToken": api_key, "address": jellyfin_url}]}, discover=False)
+
         headers = apikey_ezpztv.jellyfin.get_default_headers()
         if mode == 'true':
             response = apikey_ezpztv.jellyfin.send_request(
@@ -107,7 +107,7 @@ def run_libraryapi_task(api_key, jellyfin_url, lib_refresh, jellyfin_vods_path='
             headers=headers,
             data=body
         )
-        if response.status_code in (204, 200):
+        if response.status_code == 204:
             print(f"Targeted library refresh sent for {len(paths)} new path(s).")
         elif response.status_code == 401:
             print("Invalid API key.")

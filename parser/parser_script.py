@@ -51,7 +51,8 @@ def main():
              root='local_vods_dir', added_paths=added_paths)
         vars(torf, variables_all, move_files=move_files, live_tv='live_tv', sync_directories=sync_directories,
              UNSORTED='UNSORTED', should_remove=should_remove, local_vods_dir='local_vods_dir',
-             added_paths=added_paths)        report_retention(should_remove)
+             added_paths=added_paths)
+        report_retention(should_remove)
         # Remember what this run wrote and which providers were trusted
         record_run(state, vars(relative_written, variables_all, written, 'root_dir'), source_status)
         vars(prune_state, variables_all, state, 'local_vods_dir')

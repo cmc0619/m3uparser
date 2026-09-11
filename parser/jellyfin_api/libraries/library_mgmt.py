@@ -358,7 +358,7 @@ def run_library_task(main_client, jellyfin_url, lib_refresh, jellyfin_vods_path=
             headers=headers,
             data=body
         )
-        if response.status_code in (204, 200):
+        if response.status_code == 204:
             print(f"Targeted library refresh sent for {len(paths)} new path(s).")
         elif response.status_code == 401:
             print("Library refresh task failed")
