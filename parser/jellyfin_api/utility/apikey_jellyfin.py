@@ -52,9 +52,27 @@ def run_guide_task(api_key, jellyfin_url, live_tv):
         print("Live TV not enabled")
 
 
-def run_libraryapi_task(api_key, jellyfin_url, lib_refresh):
-    if lib_refresh:
-        # Use api-key method to get default headers
+def run_libraryapi_task(api_key, jellyfin_url, lib_refresh, jellyfin_vods_path='', local_vods_dir='',
+                        added_paths=None):
+    from parser.config.variables import parse_refresh_lib
+    from parser.jellyfin_api.utility.library_refresh import media_updated_body
+
+    mode = parse_refresh_lib(lib_refresh)
+    if mode == 'false':
+        print("Library refresh is set to false; set REFRESH_LIB=true or REFRESH_LIB=targeted to enable")
+        return
+
+    if mode == 'targeted':
+        paths = list(added_paths or [])
+        if not paths:
+            print("Targeted library refresh: nothing new to notify Jellyfin about")
+            return
+        if not jellyfin_vods_path:
+            print("Targeted library refresh skipped: set JELLYFIN_VODS_PATH to Jellyfin's VODS mount path")
+            return
+
+    # Use api-key method to get default headers
+    try:
         apikey_ezpztv = JellyfinClient()
         apikey_ezpztv.config.app('EZPZTV', '21.12', 'device', '123456')
         apikey_ezpztv.config.data["auth.ssl"] = True
@@ -62,16 +80,14 @@ def run_libraryapi_task(api_key, jellyfin_url, lib_refresh):
             {"Servers": [
                 {"AccessToken": api_key, "address": jellyfin_url}]}, discover=False)
 
-        try:
-            headers = apikey_ezpztv.jellyfin.get_default_headers()
-            # Send POST request to the specified endpoint
+        headers = apikey_ezpztv.jellyfin.get_default_headers()
+        if mode == 'true':
             response = apikey_ezpztv.jellyfin.send_request(
                 jellyfin_url,
                 "/Library/Refresh",
                 method="post",
                 headers=headers
             )
-
             if response.status_code == 204:
                 print("Library refresh task started successfully.")
             elif response.status_code == 401:
@@ -79,11 +95,28 @@ def run_libraryapi_task(api_key, jellyfin_url, lib_refresh):
             else:
                 print(f"Failed to start Library refresh task. Status Code: {response.status_code},"
                       f" Response: {response.content}")
+            return
 
-        except Exception as e:
-            print(f"Failed to start Library refresh task: {e}")
-    else:
-        print(f"Library refresh is set to false, set REFRESH_LIB=true in compose file to enable")
+        headers = dict(headers)
+        headers["Content-Type"] = "application/json"
+        body = media_updated_body(paths, local_vods_dir, jellyfin_vods_path)
+        response = apikey_ezpztv.jellyfin.send_request(
+            jellyfin_url,
+            "/Library/Media/Updated",
+            method="post",
+            headers=headers,
+            data=body
+        )
+        if response.status_code == 204:
+            print(f"Targeted library refresh sent for {len(paths)} new path(s).")
+        elif response.status_code == 401:
+            print("Invalid API key.")
+        else:
+            print(f"Failed targeted library refresh. Status Code: {response.status_code},"
+                  f" Response: {response.content}")
+
+    except Exception as e:
+        print(f"Failed to start Library refresh task: {e}")
 
 
 def api_upload_log(file_path, api_key, jellyfin_url, rerun):

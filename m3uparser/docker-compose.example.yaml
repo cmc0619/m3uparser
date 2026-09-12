@@ -46,7 +46,10 @@ services:
       - SCRUB_HEADER="\,"
       - JELLYFIN_URL=http://<jellyfin-host>:8096
       - API_KEY=<jellyfin-api-key>
-      - REFRESH_LIB=true
+      # false | true (full refresh) | targeted (new VOD paths only)
+      - REFRESH_LIB=targeted
+      # Jellyfin-internal path that mounts the same host VODS tree
+      - JELLYFIN_VODS_PATH=/data/vod
       - UNSORTED=true
     volumes:
       - /mnt/user/data/media/VODS:/usr/src/app/VODS

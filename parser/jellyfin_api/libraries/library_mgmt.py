@@ -306,15 +306,32 @@ def library_refresh_disable(main_client, jellyfin_url):
 
 
 # ====================================
-# Run Library refresh REFRESH_LIB=true
+# Run Library refresh REFRESH_LIB=true|targeted
 # ====================================
 
 
-def run_library_task(main_client, jellyfin_url, lib_refresh):
-    if lib_refresh:
-        try:
-            headers = main_client.jellyfin.get_default_headers()
-            # Send POST request to the specified endpoint
+def run_library_task(main_client, jellyfin_url, lib_refresh, jellyfin_vods_path='', local_vods_dir='',
+                     added_paths=None):
+    from parser.config.variables import parse_refresh_lib
+    from parser.jellyfin_api.utility.library_refresh import media_updated_body
+
+    mode = parse_refresh_lib(lib_refresh)
+    if mode == 'false':
+        print("Library refresh is set to false; set REFRESH_LIB=true or REFRESH_LIB=targeted to enable")
+        return
+
+    if mode == 'targeted':
+        paths = list(added_paths or [])
+        if not paths:
+            print("Targeted library refresh: nothing new to notify Jellyfin about")
+            return
+        if not jellyfin_vods_path:
+            print("Targeted library refresh skipped: set JELLYFIN_VODS_PATH to Jellyfin's VODS mount path")
+            return
+
+    try:
+        headers = main_client.jellyfin.get_default_headers()
+        if mode == 'true':
             response = main_client.jellyfin.send_request(
                 jellyfin_url,
                 "/Library/Refresh",
@@ -329,11 +346,28 @@ def run_library_task(main_client, jellyfin_url, lib_refresh):
             else:
                 print(f"Failed to start Library refresh task. Status Code: {response.status_code},"
                       f" Response: {response.content}")
+            return
 
-        except Exception as e:
-            print(f"Failed to start Library refresh task: {e}")
-    else:
-        print(f"Library refresh is set to false, set REFRESH_LIB=true in compose file to enable")
+        headers = dict(headers)
+        headers["Content-Type"] = "application/json"
+        body = media_updated_body(paths, local_vods_dir, jellyfin_vods_path)
+        response = main_client.jellyfin.send_request(
+            jellyfin_url,
+            "/Library/Media/Updated",
+            method="post",
+            headers=headers,
+            data=body
+        )
+        if response.status_code == 204:
+            print(f"Targeted library refresh sent for {len(paths)} new path(s).")
+        elif response.status_code == 401:
+            print("Library refresh task failed")
+        else:
+            print(f"Failed targeted library refresh. Status Code: {response.status_code},"
+                  f" Response: {response.content}")
+
+    except Exception as e:
+        print(f"Failed to start Library refresh task: {e}")
 
 # ====================================
 # Run TV guide refresh

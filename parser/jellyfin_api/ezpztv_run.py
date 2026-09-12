@@ -4,14 +4,15 @@ from parser.jellyfin_api.libraries import run_scheduled_task, run_library_task
 from parser.config.variables import *
 
 
-def ezpztv_task():
+def ezpztv_task(added_paths=None):
     try:
         print("Checking for server connectivity")
         value = vars(ping_server, variables_all, 'jellyfin_url', max_retries=8, interval=7)
         if value == "continue":
             main_client = vars(client_main_user, variables_all, 'jellyfin_url', 'main_user', 'main_pass')
             vars(run_scheduled_task, variables_all, main_client, 'jellyfin_url', 'live_tv', 'application_version')
-            vars(run_library_task, variables_all, main_client, 'jellyfin_url', 'lib_refresh')
+            vars(run_library_task, variables_all, main_client, 'jellyfin_url', 'lib_refresh',
+                 'jellyfin_vods_path', 'local_vods_dir', added_paths=added_paths or [])
             vars(upload_log, variables_all, main_client, 'log_file', 'jellyfin_url', 'HOURS')
         else:
             exit(0)
